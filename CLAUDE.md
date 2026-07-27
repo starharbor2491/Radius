@@ -45,14 +45,25 @@ scripts/        smoke tests, the macOS installer, the icon generator
 published release and falls back to building from source with a Node it fetches
 into a temp directory, so the only prerequisite is macOS itself.
 
-Two things there are easy to break:
+Three things there are easy to break:
 
+- **The installer must stay pure ASCII, with every expansion braced.** macOS
+  ships bash 3.2, which decides variable-name characters with `isalnum()` one
+  byte at a time; in a non-UTF-8 locale the leading byte of a character like an
+  ellipsis passes, so `"$INSTALL_DIR…"` parses as a variable named
+  `INSTALL_DIR` plus that byte. Unset, `set -u`, install dead one line before
+  the copy. This shipped and broke on a real Mac. `bash -n` does not catch it;
+  `tests/install-script.test.ts` does.
 - **Artifact names are pinned** (`artifactName` in the build config) because
   electron-builder omits the arch for x64 by default, and the installer matches
   assets by architecture. Change the pattern and x64 downloads stop resolving.
 - **The app must be ad-hoc signed** (`codesign --sign -`). Apple Silicon refuses
   to run any unsigned executable, so an unsigned local build simply will not
   launch. The installer and the release workflow both do this.
+
+`scripts/test-install.sh` sources the installer with stubbed macOS tools and
+checks what actually lands on disk -- clean install, replacing an existing one,
+paths with spaces, the sudo branch. It runs as part of `npm test`.
 
 `.github/workflows/release.yml` builds on real macOS runners; a tag push
 publishes the assets the installer then downloads.

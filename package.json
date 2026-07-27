@@ -22,7 +22,8 @@
     "smoke": "electron-vite build && electron --no-sandbox scripts/smoke-renderer.cjs",
     "package": "npm run build && electron-builder",
     "smoke:app": "electron-vite build && electron --no-sandbox scripts/smoke-app.cjs",
-    "package:mac": "electron-vite build && electron-builder --mac --publish never"
+    "package:mac": "electron-vite build && electron-builder --mac --publish never",
+    "test:install": "bash scripts/test-install.sh"
   },
   "dependencies": {
     "motion": "^12.42.2",

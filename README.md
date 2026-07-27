@@ -81,6 +81,7 @@ updates -- `npm install` downloads packages and `npm run dev` opens the browser.
 | `npm test` | Unit tests (vitest) |
 | `npm run smoke` | Boot the chrome in Electron and assert it renders |
 | `npm run smoke:app` | Boot the whole app, navigate to a page, assert it works |
+| `npm run test:install` | Exercise the macOS installer against stubbed tools |
 | `npm run typecheck` | Typecheck the Node and web projects |
 | `npm run package:mac` | Build a macOS `.app`, `.dmg` and `.zip` |
 | `npm run package` | Build and package for the current platform |
