@@ -22,7 +22,9 @@ are implemented. See [ROADMAP.md](ROADMAP.md) for what is done and what is next.
 - **A token engine.** One JSON document describes every colour, blur, radius,
   duration and spring in the app, resolving to CSS custom properties at runtime.
   Drag a slider in the Theme Studio and the whole chrome repaints.
-- **Local-first, BYOK.** All state lives in one SQLite file in your user data
+- **The rest of a browser.** History with search, a downloads manager, find in
+  page, per-tab zoom, and a command palette that reaches all of it.
+- **Local-first, BYOK.** All state lives in one JSON file in your user data
   directory. API keys are encrypted with the OS keychain through Electron's
   `safeStorage` and never cross an IPC boundary. There is no server component.
 
@@ -30,14 +32,12 @@ are implemented. See [ROADMAP.md](ROADMAP.md) for what is done and what is next.
 
 ```bash
 npm install
-npm run rebuild     # build better-sqlite3 against Electron's ABI
 npm run dev
 ```
 
-`npm run rebuild` is required once after install, and again after any Electron
-upgrade: `better-sqlite3` is a native module and ships prebuilds for Node, not
-for Electron. It needs a working toolchain (python3, make, a C++ compiler) and
-network access to `electronjs.org` for the matching headers.
+That is the whole setup. Radius has no native modules, so there is no compile
+step, no build toolchain to install, and nothing to rebuild when Electron
+updates -- `npm install` downloads packages and `npm run dev` opens the browser.
 
 ## Scripts
 
@@ -46,10 +46,17 @@ network access to `electronjs.org` for the matching headers.
 | `npm run dev` | Run in development, with HMR for the chrome |
 | `npm run build` | Typecheck, then build main, preload and renderer |
 | `npm test` | Unit tests (vitest) |
-| `npm run smoke` | Boot the built chrome in Electron and assert it renders |
+| `npm run smoke` | Boot the chrome in Electron and assert it renders |
+| `npm run smoke:app` | Boot the whole app, navigate to a page, assert it works |
 | `npm run typecheck` | Typecheck the Node and web projects |
-| `npm run rebuild` | Rebuild native modules against Electron |
 | `npm run package` | Build and package with electron-builder |
+
+## AI quick actions
+
+The assistant panel (⌘J) carries one-tap actions over whatever you are reading:
+summarize, extract key facts, explain the selection, translate, simplify, and
+"what is missing?". Each runs through the same provider and streaming path as
+ordinary chat, and each is also a ⌘K command.
 
 ## Configuring a provider
 
@@ -90,10 +97,15 @@ someone sent you" close to zero.
 | ⌘J | Toggle the AI panel |
 | ⌘B | Toggle the sidebar |
 | ⌘⇧N | New workspace |
+| ⌘F | Find in page |
+| ⌘Y | History |
+| ⌘⇧J | Downloads |
+| ⌘+ / ⌘- / ⌘0 | Zoom in, out, reset |
 | ⌘⇧, | Theme Studio |
 
-Every command is remappable-by-design: the menu bar, the keyboard and the
-palette all dispatch through one registry in `src/renderer/lib/commands.ts`.
+Every one of these is remappable in Settings — press the key you want and it is
+saved. The menu bar, the keyboard and the palette all dispatch through one
+registry in `src/renderer/lib/commands.ts`, so a command is defined once.
 
 ## Licence
 

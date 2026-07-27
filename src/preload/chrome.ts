@@ -17,7 +17,7 @@ import type {
  */
 
 /** Mirrors `ipcEvents` in @shared/ipc. Kept literal so nothing is imported. */
-const EVENT_NAMES = ['state:changed', 'ai:stream', 'command:invoke'] as const
+const EVENT_NAMES = ['state:changed', 'ai:stream', 'command:invoke', 'find:result'] as const
 
 export interface RadiusBridge {
   invoke<C extends IpcChannel>(channel: C, payload: IpcRequest<C>): Promise<IpcResponse<C>>

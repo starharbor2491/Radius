@@ -20,12 +20,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "electron-vite build && electron --no-sandbox scripts/smoke-renderer.cjs",
-    "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "smoke:app": "electron-vite build && electron --no-sandbox scripts/smoke-app.cjs"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.1",
-    "drizzle-orm": "^0.45.2",
     "motion": "^12.42.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -33,8 +31,6 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -49,9 +45,23 @@
   "build": {
     "appId": "dev.radius.browser",
     "productName": "Radius",
-    "files": ["out/**/*", "resources/**/*"],
-    "mac": { "category": "public.app-category.productivity" },
-    "linux": { "target": ["AppImage"], "category": "Network" },
-    "win": { "target": ["nsis"] }
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   }
 }

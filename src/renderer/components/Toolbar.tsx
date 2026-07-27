@@ -8,7 +8,11 @@ import { Omnibox } from './Omnibox'
 export function Toolbar(): JSX.Element {
   const tab = useActiveTab()
   const bookmarks = useAppStore((store) => store.state.bookmarks)
-  const { sidebarOpen, toggleSidebar, rightPanel, toggleRightPanel } = useUiStore()
+  const { sidebarOpen, toggleSidebar, rightPanel, toggleRightPanel, findOpen, setFindOpen } =
+    useUiStore()
+  const downloading = useAppStore((store) =>
+    store.state.downloads.some((item) => item.state === 'progressing')
+  )
 
   const bookmarked = tab ? bookmarks.some((bookmark) => bookmark.url === tab.url) : false
 
@@ -71,6 +75,32 @@ export function Toolbar(): JSX.Element {
         }}
       >
         {bookmarked ? '★' : '☆'}
+      </IconButton>
+
+      <IconButton
+        aria-label="Find in page"
+        title="Find in page  ⌘F"
+        active={findOpen}
+        disabled={!tab}
+        onClick={() => setFindOpen(!findOpen)}
+      >
+        ⌕
+      </IconButton>
+      <IconButton
+        aria-label="History"
+        title="History  ⌘Y"
+        active={rightPanel === 'history'}
+        onClick={() => toggleRightPanel('history')}
+      >
+        ↺
+      </IconButton>
+      <IconButton
+        aria-label="Downloads"
+        title="Downloads  ⌘⇧J"
+        active={rightPanel === 'downloads'}
+        onClick={() => toggleRightPanel('downloads')}
+      >
+        {downloading ? '⇩' : '⤓'}
       </IconButton>
 
       <IconButton

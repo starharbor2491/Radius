@@ -22,6 +22,19 @@ Anthropic, OpenAI and Google, the OpenAI-compatible path, and manifest
 providers — because dropping the AI SDK in favour of a raw fetch/SSE layer made
 the generic tiers nearly free.
 
+## M1.5 — Browser fundamentals and no-build setup ✅
+
+- Dropped the native SQLite dependency for a zero-dependency JSON store, so
+  setup is `npm install && npm run dev` with no compile step
+- History with search, recency grouping and clear controls
+- Downloads manager with live progress, open / reveal / cancel
+- Find in page with match counts and next/previous
+- Per-tab zoom on a fixed ladder
+- AI quick actions: summarize, extract facts, explain, translate, simplify,
+  "what is missing?" — each also a ⌘K command
+- Remappable keyboard shortcuts with conflict detection
+- Tab and workspace cycling
+
 ## M2 — AI depth
 
 - Routing rules: per-feature model assignment with ordered fallback chains on
@@ -30,14 +43,15 @@ the generic tiers nearly free.
 - Whole-workspace Q&A across open tabs
 - Tool calling and reasoning-token handling in the native adapters
 - Budgets and alerts on the cost meter
+- Per-site zoom and permission memory
 - Bounded page agent (fill, click, navigate) with per-step confirmation
 
 ## M3 — Customization surfaces
 
 - Layout editor: dockable regions (`top`/`bottom`/`left`/`right`/`floating`),
   drag-and-drop panels, per-workspace layout presets
-- Keybinding remapper with chords, conflict detection, and
-  Radius/Vim/Arc/Chrome presets
+- Chord bindings (`g` `t`) and Radius/Vim/Arc/Chrome preset sets on top of the
+  existing remapper
 - Theme gallery and a documented `data-radius-part` contract for user CSS
 - Per-workspace theme overrides beyond the accent
 

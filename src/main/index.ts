@@ -1,18 +1,19 @@
 import { join } from 'node:path'
 import { app, Menu, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { databasePathFor, openDatabase, type DbHandle } from './db'
+import { JsonStore, storePathFor } from './store/JsonStore'
 import { StateStore } from './state/StateStore'
 import { SecretStore } from './ai/SecretStore'
 import { ProviderRegistry } from './ai/ProviderRegistry'
 import { ThemeService } from './theme/ThemeService'
 import { PageContextService } from './page/PageContextService'
+import { DownloadService } from './downloads/DownloadService'
 import { RadiusWindow } from './window/RadiusWindow'
 import { TabManager } from './tabs/TabManager'
 import { buildState, registerIpcHandlers, type AppServices } from './ipc/handlers'
 
 const PARTITION = 'persist:radius'
 
-let dbHandle: DbHandle | null = null
+let store: JsonStore | null = null
 let services: AppServices | null = null
 
 function rendererEntry(): { devUrl?: string; filePath: string } {
@@ -92,18 +93,20 @@ function buildMenu(send: (command: string) => void): void {
 function bootstrap(): void {
   hardenSession()
 
-  const handle = openDatabase(databasePathFor(app.getPath('userData')))
-  dbHandle = handle
+  const jsonStore = new JsonStore(storePathFor(app.getPath('userData')))
+  store = jsonStore
 
-  const state = new StateStore(handle.db)
+  const state = new StateStore(jsonStore)
   state.ensureSeeded()
 
-  const secrets = new SecretStore(handle.db)
-  const providers = new ProviderRegistry(handle.db, secrets, state)
+  const secrets = new SecretStore(jsonStore)
+  const providers = new ProviderRegistry(jsonStore, secrets, state)
   providers.seedBuiltIns()
 
   const theme = new ThemeService(state)
   const pageContext = new PageContextService()
+  const downloads = new DownloadService(state, PARTITION)
+  downloads.attach()
 
   // The window's page-view callbacks need the TabManager, which needs the
   // window. The indirection through `tabs` resolves that cycle: nothing fires
@@ -114,7 +117,11 @@ function bootstrap(): void {
     onFavicon: (tabId, favicon) => tabs?.handleFavicon(tabId, favicon),
     onLoading: (tabId, loading) => tabs?.handleLoading(tabId, loading),
     onNavigate: (tabId, url, back, forward) => tabs?.handleNavigate(tabId, url, back, forward),
-    onOpenUrl: (url, background) => tabs?.handleOpenUrl(url, background)
+    onOpenUrl: (url, background) => tabs?.handleOpenUrl(url, background),
+    onFoundInPage: (tabId, activeMatchOrdinal, matches) => {
+      if (window.chromeView.webContents.isDestroyed()) return
+      window.chromeView.webContents.send('find:result', { tabId, activeMatchOrdinal, matches })
+    }
   })
 
   tabs = new TabManager(state, window)
@@ -124,7 +131,7 @@ function bootstrap(): void {
     radius: activeTheme.geometry.pageRadius
   })
 
-  services = { state, tabs, window, providers, theme, pageContext }
+  services = { state, tabs, window, providers, theme, pageContext, downloads }
   registerIpcHandlers(services)
 
   state.subscribe((snapshot) => {
@@ -153,7 +160,7 @@ function bootstrap(): void {
   })
 }
 
-// A second instance should focus the first rather than fight over the SQLite file.
+// A second instance should focus the first rather than fight over the state file.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -180,7 +187,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     services?.providers.cancelAll()
     services?.tabs.stopSuspensionSweep()
-    dbHandle?.close()
-    dbHandle = null
+    store?.close()
+    store = null
   })
 }

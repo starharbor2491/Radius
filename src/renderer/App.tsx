@@ -8,7 +8,10 @@ import { send } from './lib/bridge'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
 import { CommandPalette } from './components/CommandPalette'
+import { FindBar } from './components/FindBar'
 import { ChatPanel } from './panels/ChatPanel'
+import { HistoryPanel } from './panels/HistoryPanel'
+import { DownloadsPanel } from './panels/DownloadsPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { ThemeStudio } from './panels/ThemeStudio'
 import { IconButton, Toast } from './ui/primitives'
@@ -16,7 +19,9 @@ import { IconButton, Toast } from './ui/primitives'
 const PANEL_TITLES: Record<string, string> = {
   ai: 'Assistant',
   settings: 'Settings',
-  theme: 'Theme studio'
+  theme: 'Theme studio',
+  history: 'History',
+  downloads: 'Downloads'
 }
 
 export function App(): JSX.Element {
@@ -102,6 +107,7 @@ export function App(): JSX.Element {
       <div className="rx-main">
         <div ref={toolbarRef}>
           <Toolbar />
+          <FindBar />
         </div>
         <div className="rx-viewport">{ready ? null : 'Starting Radius…'}</div>
       </div>
@@ -137,6 +143,8 @@ export function App(): JSX.Element {
               {rightPanel === 'ai' ? <ChatPanel /> : null}
               {rightPanel === 'settings' ? <SettingsPanel /> : null}
               {rightPanel === 'theme' ? <ThemeStudio /> : null}
+              {rightPanel === 'history' ? <HistoryPanel /> : null}
+              {rightPanel === 'downloads' ? <DownloadsPanel /> : null}
             </div>
           </motion.div>
         ) : null}

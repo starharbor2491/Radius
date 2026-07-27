@@ -5,6 +5,19 @@ import { parseOmniboxInput, resolveSearchEngine } from '@shared/url'
 
 export const NEW_TAB_URL = 'about:blank'
 
+const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3]
+const MIN_ZOOM = ZOOM_STEPS[0]!
+const MAX_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1]!
+
+/** Index of the ladder rung closest to an arbitrary zoom factor. */
+function nearestStep(factor: number): number {
+  let best = 0
+  for (const [index, step] of ZOOM_STEPS.entries()) {
+    if (Math.abs(step - factor) < Math.abs(ZOOM_STEPS[best]! - factor)) best = index
+  }
+  return best
+}
+
 export interface SuspensionOptions {
   /** Minutes of inactivity before a background tab's view is torn down. */
   idleMinutes: number
@@ -278,10 +291,15 @@ export class TabManager {
 
   handleTitle(tabId: string, title: string): void {
     this.state.updateTab(tabId, { title })
+    // Titles land after the navigation, so annotate rather than re-count.
+    const tab = this.state.getTab(tabId)
+    if (tab) this.state.annotateHistory(tab.url, { title })
   }
 
   handleFavicon(tabId: string, faviconUrl: string | null): void {
     this.state.updateTab(tabId, { faviconUrl })
+    const tab = this.state.getTab(tabId)
+    if (tab) this.state.annotateHistory(tab.url, { faviconUrl })
   }
 
   handleLoading(tabId: string, loading: boolean): void {
@@ -289,8 +307,68 @@ export class TabManager {
   }
 
   handleNavigate(tabId: string, url: string, canGoBack: boolean, canGoForward: boolean): void {
+    const previous = this.state.getTab(tabId)
     this.state.updateTab(tabId, { url })
     this.state.setRuntime(tabId, { canGoBack, canGoForward })
+
+    // Only a genuine change of address is a visit; an in-page anchor is not.
+    if (previous?.url !== url) {
+      this.state.recordVisit({ url, title: previous?.title ?? '', faviconUrl: null })
+    }
+  }
+
+  /* --------------------------------------------------- find and zoom */
+
+  /**
+   * Runs an incremental find.
+   *
+   * `findNext: true` starts a new find session and `false` steps within the
+   * current one -- the reverse of what the name suggests. Getting this backwards
+   * silently reports nothing, because Chromium has no session to continue.
+   */
+  find(input: {
+    tabId: string
+    query: string
+    forward: boolean
+    findNext: boolean
+    matchCase: boolean
+  }): void {
+    const contents = this.window.getView(input.tabId)?.webContents
+    if (!contents) return
+    if (!input.query) {
+      contents.stopFindInPage('clearSelection')
+      return
+    }
+    contents.findInPage(input.query, {
+      forward: input.forward,
+      findNext: input.findNext,
+      matchCase: input.matchCase
+    })
+  }
+
+  stopFind(tabId: string, keepSelection: boolean): void {
+    this.window
+      .getView(tabId)
+      ?.webContents.stopFindInPage(keepSelection ? 'keepSelection' : 'clearSelection')
+  }
+
+  setZoom(tabId: string, factor: number): number {
+    const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, factor))
+    const contents = this.window.getView(tabId)?.webContents
+    if (contents) contents.setZoomFactor(clamped)
+    this.state.setRuntime(tabId, { zoom: clamped })
+    return clamped
+  }
+
+  stepZoom(tabId: string, direction: 'in' | 'out' | 'reset'): number {
+    if (direction === 'reset') return this.setZoom(tabId, 1)
+    const current = this.state.getRuntime(tabId).zoom
+    // Step through a fixed ladder so repeated presses land on round values
+    // rather than drifting by a multiplier.
+    const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) < 0.001)
+    const base = index === -1 ? nearestStep(current) : index
+    const next = direction === 'in' ? Math.min(base + 1, ZOOM_STEPS.length - 1) : Math.max(base - 1, 0)
+    return this.setZoom(tabId, ZOOM_STEPS[next]!)
   }
 
   handleOpenUrl(url: string, background: boolean): void {

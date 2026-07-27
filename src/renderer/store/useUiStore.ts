@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { send } from '../lib/bridge'
 
-export type RightPanel = 'none' | 'ai' | 'settings' | 'theme'
+export type RightPanel = 'none' | 'ai' | 'settings' | 'theme' | 'history' | 'downloads'
 
 interface UiStore {
   sidebarOpen: boolean
@@ -11,6 +11,7 @@ interface UiStore {
   paletteOpen: boolean
   omniboxFocused: boolean
   bookmarksOpen: boolean
+  findOpen: boolean
   toast: string | null
 
   toggleSidebar: () => void
@@ -21,6 +22,7 @@ interface UiStore {
   setPaletteOpen: (open: boolean) => void
   setOmniboxFocused: (focused: boolean) => void
   toggleBookmarks: () => void
+  setFindOpen: (open: boolean) => void
   showToast: (message: string | null) => void
 }
 
@@ -45,6 +47,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   paletteOpen: false,
   omniboxFocused: false,
   bookmarksOpen: false,
+  findOpen: false,
   toast: null,
 
   toggleSidebar: () => set((store) => ({ sidebarOpen: !store.sidebarOpen })),
@@ -67,6 +70,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   },
 
   toggleBookmarks: () => set((store) => ({ bookmarksOpen: !store.bookmarksOpen })),
+  // The find bar lives inside the chrome's own toolbar strip, so it needs no
+  // overlay -- the page stays interactive while you search it.
+  setFindOpen: (findOpen) => set({ findOpen }),
   showToast: (toast) => set({ toast })
 }))
 

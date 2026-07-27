@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { motion } from 'motion/react'
 import type { ChatMessage } from '@shared/types'
 import { displayHost } from '@shared/url'
+import { QUICK_ACTIONS, type QuickAction } from '@shared/quick-actions'
 import { useActiveTab, useAppStore, useWorkspaceTabs } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
@@ -83,16 +84,31 @@ export function ChatPanel(): JSX.Element {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, draft?.text])
 
+  // The command palette can fire a quick action; the panel owns provider and
+  // model selection, so it has to be what actually dispatches the run.
+  useEffect(() => {
+    const listener = (event: Event): void => {
+      const actionId = (event as CustomEvent<string>).detail
+      const action = QUICK_ACTIONS.find((candidate) => candidate.id === actionId)
+      if (action) void runQuickAction(action)
+    }
+    window.addEventListener('radius:quick-action', listener)
+    return () => window.removeEventListener('radius:quick-action', listener)
+  })
+
   const contextTabs = tabs.filter((tab) => tab.inAiContext)
 
-  const submit = (): void => {
-    const trimmed = input.trim()
-    if (!trimmed || !provider || !modelId || draft) return
+  /**
+   * Sends a turn. Quick actions funnel through here too, so they inherit
+   * streaming, cancellation and cost tracking rather than duplicating them.
+   */
+  const dispatch = (content: string, feature: string, extraContextTabIds: string[] = []): void => {
+    if (!provider || !modelId || draft) return
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: trimmed,
+      content,
       createdAt: Date.now()
     }
     const history = [...messages, userMessage]
@@ -108,9 +124,40 @@ export function ChatPanel(): JSX.Element {
       providerId: provider.id,
       modelId,
       messages: history,
-      contextTabIds: contextTabs.map((tab) => tab.id),
-      feature: 'chat'
+      contextTabIds: [...new Set([...contextTabs.map((tab) => tab.id), ...extraContextTabIds])],
+      feature
     })
+  }
+
+  const submit = (): void => {
+    const trimmed = input.trim()
+    if (trimmed) dispatch(trimmed, 'chat')
+  }
+
+  /**
+   * Runs a quick action against the active tab.
+   *
+   * The page is added to context for this turn regardless of the sidebar
+   * toggles -- "summarize this page" that ignores the page would be useless.
+   */
+  const runQuickAction = async (action: QuickAction): Promise<void> => {
+    if (!activeTab) return
+    const context = await bridge.invoke('page:getContext', { tabId: activeTab.id })
+
+    if (action.needs === 'selection' && !context.selection) {
+      setError('Select some text on the page first.')
+      return
+    }
+
+    dispatch(
+      action.prompt({
+        title: context.title || activeTab.title,
+        url: context.url,
+        selection: context.selection
+      }),
+      action.id,
+      [activeTab.id]
+    )
   }
 
   if (usableProviders.length === 0) {
@@ -159,7 +206,22 @@ export function ChatPanel(): JSX.Element {
             {tab.inAiContext ? '✦' : '＋'} {tab.title || displayHost(tab.url) || 'New tab'}
           </span>
         ))}
-        {activeTab && !activeTab.inAiContext ? null : null}
+      </div>
+
+      <div className="rx-quick-actions">
+        {QUICK_ACTIONS.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className="rx-quick-action"
+            title={action.hint}
+            disabled={!activeTab || Boolean(draft)}
+            onClick={() => void runQuickAction(action)}
+          >
+            <span aria-hidden>{action.icon}</span>
+            {action.label}
+          </button>
+        ))}
       </div>
 
       <div className="rx-chat-log" ref={logRef}>

@@ -5,6 +5,8 @@ import {
   BookmarkFolderSchema,
   BookmarkSchema,
   ChatMessageSchema,
+  FindResultSchema,
+  HistoryEntrySchema,
   IdSchema,
   ModelInfoSchema,
   PageContextSchema,
@@ -185,6 +187,63 @@ export const ipcContract = {
   'window:toggleMaximize': { request: Empty, response: Ok },
   'window:close': { request: Empty, response: Ok },
 
+  /* ------------------------------------------------------------ history */
+  'history:search': {
+    request: z.object({ query: z.string().default(''), limit: z.number().int().optional() }),
+    response: z.array(HistoryEntrySchema)
+  },
+  'history:delete': { request: z.object({ entryId: IdSchema }), response: Ok },
+  /** `sinceMs: null` clears everything; a timestamp clears only newer visits. */
+  'history:clear': { request: z.object({ sinceMs: z.number().int().nullable() }), response: Ok },
+
+  /* ---------------------------------------------------------- downloads */
+  'downloads:open': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:reveal': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:cancel': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:remove': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:clearFinished': { request: Empty, response: Ok },
+
+  /* --------------------------------------------------------------- find */
+  /**
+   * Results arrive as `find:result` events, since a search updates as you type.
+   *
+   * `findNext` mirrors Electron and reads backwards from what you would guess:
+   * `true` means "begin a new find session" (use it for a new or edited query)
+   * and `false` means "advance within the existing session" (use it for
+   * next/previous). Sending `false` with no session open reports nothing at all.
+   */
+  'find:start': {
+    request: z.object({
+      tabId: IdSchema,
+      query: z.string(),
+      forward: z.boolean().default(true),
+      findNext: z.boolean().default(true),
+      matchCase: z.boolean().default(false)
+    }),
+    response: Ok
+  },
+  'find:stop': {
+    request: z.object({ tabId: IdSchema, keepSelection: z.boolean().default(false) }),
+    response: Ok
+  },
+
+  /* --------------------------------------------------------------- zoom */
+  'zoom:set': {
+    request: z.object({ tabId: IdSchema, factor: z.number().min(0.25).max(5) }),
+    response: z.object({ factor: z.number() })
+  },
+  'zoom:step': {
+    request: z.object({ tabId: IdSchema, direction: z.enum(['in', 'out', 'reset']) }),
+    response: z.object({ factor: z.number() })
+  },
+
+  /* -------------------------------------------------------- keybindings */
+  'keybindings:get': { request: Empty, response: z.record(z.string(), z.string()) },
+  'keybindings:set': {
+    request: z.object({ bindings: z.record(z.string(), z.string()) }),
+    response: Ok
+  },
+
   /* -------------------------------------------------------------- theme */
   'theme:get': {
     request: Empty,
@@ -272,6 +331,8 @@ export const ipcEvents = {
   /** A fresh authoritative snapshot. Main owns the state; the renderer mirrors it. */
   'state:changed': AppStateSchema,
   'ai:stream': AiStreamEventSchema,
+  /** Match counts for the find bar, pushed as the query is refined. */
+  'find:result': FindResultSchema,
   /** A global shortcut or menu item fired a named command. */
   'command:invoke': z.object({ command: z.string() })
 } as const satisfies Record<string, z.ZodType>

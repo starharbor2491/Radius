@@ -19,6 +19,7 @@ export interface PageViewCallbacks {
   onLoading: (tabId: string, loading: boolean) => void
   onNavigate: (tabId: string, url: string, canGoBack: boolean, canGoForward: boolean) => void
   onOpenUrl: (url: string, background: boolean) => void
+  onFoundInPage: (tabId: string, activeMatchOrdinal: number, matches: number) => void
 }
 
 const DEFAULT_INSETS: ChromeInsets = { top: 44, right: 0, bottom: 0, left: 248 }
@@ -221,6 +222,10 @@ export class RadiusWindow {
     }
     webContents.on('did-navigate', reportNavigation)
     webContents.on('did-navigate-in-page', reportNavigation)
+
+    webContents.on('found-in-page', (_event, result) => {
+      this.callbacks.onFoundInPage(tabId, result.activeMatchOrdinal, result.matches)
+    })
 
     // target=_blank and window.open become Radius tabs rather than popups.
     webContents.setWindowOpenHandler(({ url: target, disposition }) => {

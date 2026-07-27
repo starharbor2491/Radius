@@ -4,6 +4,7 @@ import { SEARCH_ENGINES } from '@shared/url'
 import { useAppStore } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { Button, Field } from '../ui/primitives'
+import { KeybindingsEditor } from './KeybindingsEditor'
 
 /**
  * Provider setup and browser behaviour.
@@ -50,6 +51,11 @@ export function SettingsPanel(): JSX.Element {
             />
           </Field>
         </div>
+      </section>
+
+      <section>
+        <div className="rx-section-title">Keyboard</div>
+        <KeybindingsEditor />
       </section>
 
       <section>

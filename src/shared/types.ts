@@ -93,6 +93,59 @@ export const BookmarkSchema = z.object({
 export type Bookmark = z.infer<typeof BookmarkSchema>
 
 /* ------------------------------------------------------------------ *
+ * History
+ * ------------------------------------------------------------------ */
+
+export const HistoryEntrySchema = z.object({
+  id: IdSchema,
+  url: z.string(),
+  title: z.string(),
+  faviconUrl: z.string().nullable(),
+  /** Most recent visit. Revisiting an URL updates this rather than adding a row. */
+  visitedAt: z.number().int(),
+  visitCount: z.number().int()
+})
+export type HistoryEntry = z.infer<typeof HistoryEntrySchema>
+
+/* ------------------------------------------------------------------ *
+ * Downloads
+ * ------------------------------------------------------------------ */
+
+export const DownloadStateSchema = z.enum([
+  'progressing',
+  'paused',
+  'completed',
+  'cancelled',
+  'interrupted'
+])
+export type DownloadState = z.infer<typeof DownloadStateSchema>
+
+export const DownloadItemSchema = z.object({
+  id: IdSchema,
+  url: z.string(),
+  filename: z.string(),
+  savePath: z.string(),
+  state: DownloadStateSchema,
+  receivedBytes: z.number().int(),
+  /** Zero when the server sends no content-length. */
+  totalBytes: z.number().int(),
+  startedAt: z.number().int(),
+  completedAt: z.number().int().nullable()
+})
+export type DownloadItem = z.infer<typeof DownloadItemSchema>
+
+/* ------------------------------------------------------------------ *
+ * Find in page
+ * ------------------------------------------------------------------ */
+
+export const FindResultSchema = z.object({
+  tabId: IdSchema,
+  activeMatchOrdinal: z.number().int(),
+  matches: z.number().int()
+})
+export type FindResult = z.infer<typeof FindResultSchema>
+
+/* ------------------------------------------------------------------ *
  * AI providers
  * ------------------------------------------------------------------ *
  * Three tiers, as described in ARCHITECTURE.md:
@@ -253,6 +306,9 @@ export const AppStateSchema = z.object({
   activeTabIdByWorkspace: z.record(z.string(), IdSchema.nullable()),
   bookmarks: z.array(BookmarkSchema),
   bookmarkFolders: z.array(BookmarkFolderSchema),
+  /** Most recent first, capped -- the full log is not shipped to the renderer. */
+  history: z.array(HistoryEntrySchema),
+  downloads: z.array(DownloadItemSchema),
   providers: z.array(ProviderStatusSchema),
   settings: z.record(z.string(), z.unknown())
 })

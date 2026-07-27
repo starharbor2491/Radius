@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
-import type { Db } from '../db'
-import { schema } from '../db'
+import type { JsonStore } from '../store/JsonStore'
 import type { StateStore } from '../state/StateStore'
 import { SecretStore } from './SecretStore'
 import type {
@@ -40,56 +38,49 @@ export class ProviderRegistry {
   private readonly runs = new Map<string, AbortController>()
 
   constructor(
-    private readonly db: Db,
+    private readonly store: JsonStore,
     private readonly secrets: SecretStore,
     private readonly state: StateStore
   ) {}
 
+  private get records(): ProviderConfig[] {
+    return this.store.data.providers as ProviderConfig[]
+  }
+
   /* ------------------------------------------------------------ seeding */
 
   seedBuiltIns(): void {
-    const existing = new Set(
-      this.db.select({ id: schema.providers.id }).from(schema.providers).all().map((row) => row.id)
-    )
+    const existing = new Set(this.records.map((record) => record.id))
     NATIVE_ADAPTERS.forEach((adapter, index) => {
       if (existing.has(adapter.id)) return
-      this.db
-        .insert(schema.providers)
-        .values({
-          id: adapter.id,
-          tier: 'native',
-          label: adapter.label,
-          adapter: adapter.id,
-          baseUrl: null,
-          manifest: null,
-          models: adapter.defaultModels(),
-          enabled: true,
-          order: index
-        })
-        .run()
+      this.records.push({
+        id: adapter.id,
+        tier: 'native',
+        label: adapter.label,
+        adapter: adapter.id,
+        baseUrl: null,
+        manifest: null,
+        models: adapter.defaultModels(),
+        enabled: true,
+        order: index
+      })
     })
+    this.store.touch()
   }
 
   /* -------------------------------------------------------------- reads */
 
   private rows(): ProviderConfig[] {
-    return this.db
-      .select()
-      .from(schema.providers)
-      .all()
+    return this.records
       .map((row) => ({
-        id: row.id,
-        tier: row.tier as ProviderConfig['tier'],
-        label: row.label,
-        adapter: row.adapter,
-        baseUrl: row.baseUrl,
+        ...row,
         manifest: row.manifest ? ProviderManifestSchema.parse(row.manifest) : null,
+        // A model written by an older build may not match the current schema;
+        // drop those rather than failing the whole provider list.
         models: (row.models ?? []).flatMap((model) => {
           const parsed = ModelInfoSchema.safeParse(model)
           return parsed.success ? [parsed.data] : []
-        }),
-        enabled: row.enabled,
-        order: row.order
+        })
       }))
       .sort((a, b) => a.order - b.order)
   }
@@ -124,20 +115,18 @@ export class ProviderRegistry {
 
   addOpenAiCompatible(input: { label: string; baseUrl: string; models: ModelInfo[] }): ProviderStatus {
     const id = randomUUID()
-    this.db
-      .insert(schema.providers)
-      .values({
-        id,
-        tier: 'openai-compatible',
-        label: input.label,
-        adapter: null,
-        baseUrl: input.baseUrl,
-        manifest: null,
-        models: input.models,
-        enabled: true,
-        order: this.rows().length
-      })
-      .run()
+    this.records.push({
+      id,
+      tier: 'openai-compatible',
+      label: input.label,
+      adapter: null,
+      baseUrl: input.baseUrl,
+      manifest: null,
+      models: input.models,
+      enabled: true,
+      order: this.records.length
+    })
+    this.store.touch()
     return this.list().find((provider) => provider.id === id)!
   }
 
@@ -147,25 +136,26 @@ export class ProviderRegistry {
     models: ModelInfo[]
   }): ProviderStatus {
     const id = randomUUID()
-    this.db
-      .insert(schema.providers)
-      .values({
-        id,
-        tier: 'manifest',
-        label: input.label,
-        adapter: null,
-        baseUrl: null,
-        manifest: input.manifest,
-        models: input.models,
-        enabled: true,
-        order: this.rows().length
-      })
-      .run()
+    this.records.push({
+      id,
+      tier: 'manifest',
+      label: input.label,
+      adapter: null,
+      baseUrl: null,
+      manifest: input.manifest,
+      models: input.models,
+      enabled: true,
+      order: this.records.length
+    })
+    this.store.touch()
     return this.list().find((provider) => provider.id === id)!
   }
 
   remove(providerId: string): void {
-    this.db.delete(schema.providers).where(eq(schema.providers.id, providerId)).run()
+    const kept = this.records.filter((record) => record.id !== providerId)
+    this.records.length = 0
+    this.records.push(...kept)
+    this.store.touch()
     this.secrets.delete(SecretStore.keyFor(providerId))
   }
 
@@ -195,7 +185,9 @@ export class ProviderRegistry {
     })
     if (models.length === 0) return config.models
 
-    this.db.update(schema.providers).set({ models }).where(eq(schema.providers.id, providerId)).run()
+    const record = this.records.find((candidate) => candidate.id === providerId)
+    if (record) record.models = models
+    this.store.touch()
     return models
   }
 

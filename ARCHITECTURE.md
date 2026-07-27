@@ -8,11 +8,12 @@ main process (Node)
 │   └── contentView
 │       ├── ChromeView (WebContentsView)   ← React UI, transparent, full window
 │       └── PageView[] (WebContentsView)   ← one per awake tab, inset
-├── StateStore        authoritative app state, SQLite-backed
+├── StateStore        authoritative app state, JSON-backed
 ├── TabManager        tab lifecycle, suspension, session restore
 ├── ProviderRegistry  AI adapters, model catalogue, routing, cost
 ├── SecretStore       safeStorage-encrypted API keys
 ├── ThemeService      theme persistence and file import/export
+├── DownloadService   tracks transfers started by page content
 └── PageContextService  readable-text extraction for the AI panel
 ```
 
@@ -76,7 +77,7 @@ Main owns the state; the renderer mirrors it.
 
 ```
 user gesture → IPC invoke → zod validation → StateStore mutation
-             → SQLite write → coalesced notify → `state:changed` snapshot
+             → JSON write → coalesced notify → `state:changed` snapshot
              → zustand store → React
 ```
 
@@ -92,17 +93,34 @@ Two deliberate M1 tradeoffs:
   on the next microtask.
 
 Runtime facts — `loading`, `suspended`, `canGoBack`/`canGoForward` — live in an
-in-memory map, never in SQLite. After a restart every tab is suspended until
+in-memory map, never on disk. After a restart every tab is suspended until
 focused, which is what makes restoring 200 tabs instant.
 
 ### Persistence
 
-One SQLite file (`radius.db`) in the user data directory, in WAL mode, migrated
-by `user_version` pragma with hand-written forward migrations
-(`src/main/db/migrations.ts`). No codegen step ships in the packaged app.
+One JSON document (`radius-state.json`) in the user data directory, held in
+memory and written atomically — temp file plus rename, so a crash mid-write
+leaves the previous document intact rather than a truncated one. Writes are
+debounced ~300ms because a single page load mutates state several times; secrets
+flush immediately.
 
-Tables: `workspaces`, `tab_groups`, `tabs`, `closed_tabs`, `bookmark_folders`,
-`bookmarks`, `settings`, `secrets`, `providers`, `usage_records`.
+Collections: `workspaces`, `groups`, `tabs`, `closedTabs`, `bookmarkFolders`,
+`bookmarks`, `history`, `downloads`, `providers`, `usage`, `secrets`, `settings`.
+
+**This replaced SQLite deliberately.** `better-sqlite3` is a native module, so
+every install needed a C++ toolchain and an `electron-rebuild` pass against
+Electron's ABI — by far the most fragile step in getting the app running, and
+unnecessary at this data scale. A browser's own state is a few hundred KB; a
+JSON document in memory beats a query planner for it, and setup collapses to
+`npm install && npm run dev`.
+
+The limit is real and bounded: this does not scale to the full-text and vector
+search that semantic history wants in M5. That feature can bring its own index
+without disturbing anything here.
+
+An unreadable document is moved aside and the app starts empty, because a
+browser that refuses to open because its state file is malformed is worse than
+one that opens fresh.
 
 ### Tab ordering
 
@@ -181,11 +199,26 @@ Colours are OKLCH strings. `src/shared/color.ts` implements OKLCH → linear sRG
 and WCAG contrast so the Theme Studio can warn about a failing pair — a browser's
 computed style cannot answer that question for a colour you have not applied yet.
 
+## Find in page
+
+`webContents.findInPage` has a genuine trap: `findNext: true` means *begin a new
+find session* and `false` means *advance within the current one* — the reverse
+of what the name suggests. Sending `false` with no session open reports nothing
+at all, silently. A new or edited query therefore sends `true`; the next/previous
+buttons send `false`. This is noted at the IPC contract and at the call site
+because it costs an hour to rediscover.
+
+The find bar lives inside the chrome strip rather than as an overlay, so the
+page stays scrollable and interactive while you search it — overlay mode would
+make the whole page inert.
+
 ## Deliberate non-goals for M1
 
 - **No plugin API.** Customization is declarative data. This was an explicit
   product decision, not a scheduling one.
 - **No Chrome extensions.** Electron's `chrome.*` surface is partial and this is
   a large scope of its own; it sits past M5.
-- **One window.** Nothing in `WindowManager`/`TabManager` assumes it, but
+- **One window.** Nothing in `RadiusWindow`/`TabManager` assumes it, but
   multi-window is not wired up yet.
+- **Zoom is per tab, not per site.** It lives in the runtime map, so it resets
+  when a tab is suspended. Per-origin persistence is a later change.

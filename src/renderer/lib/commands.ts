@@ -1,5 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Tab } from '@shared/types'
+import { DEFAULT_KEYBINDINGS, matchesBinding } from '@shared/keybindings'
+import { QUICK_ACTIONS } from '@shared/quick-actions'
 import { bridge, send } from './bridge'
 import { useActiveTab, useAppStore } from '../store/useAppStore'
 import { useUiStore } from '../store/useUiStore'
@@ -22,6 +24,7 @@ export interface Command {
  */
 export function useCommands(): Command[] {
   const activeTab = useActiveTab()
+  const allTabs = useAppStore((store) => store.state.tabs)
   const workspaces = useAppStore((store) => store.state.workspaces)
   const activeWorkspaceId = useAppStore((store) => store.state.activeWorkspaceId)
   const ui = useUiStore()
@@ -30,6 +33,25 @@ export function useCommands(): Command[] {
   const commands = useMemo<Command[]>(() => {
     const withTab = (fn: (tab: Tab) => void) => () => {
       if (activeTab) fn(activeTab)
+    }
+
+    /** Wraps around at both ends, which is what every other browser does. */
+    const cycleTab = (delta: number): void => {
+      if (!activeWorkspaceId) return
+      const siblings = allTabs
+        .filter((tab) => tab.workspaceId === activeWorkspaceId)
+        .sort((a, b) => a.order - b.order)
+      if (siblings.length === 0) return
+      const index = siblings.findIndex((tab) => tab.id === activeTab?.id)
+      const next = siblings[(index + delta + siblings.length) % siblings.length]
+      if (next) send('tabs:activate', { tabId: next.id })
+    }
+
+    const cycleWorkspace = (delta: number): void => {
+      if (workspaces.length === 0) return
+      const index = workspaces.findIndex((workspace) => workspace.id === activeWorkspaceId)
+      const next = workspaces[(index + delta + workspaces.length) % workspaces.length]
+      if (next) send('workspaces:activate', { workspaceId: next.id })
     }
 
     const base: Command[] = [
@@ -146,6 +168,66 @@ export function useCommands(): Command[] {
         }
       },
       {
+        id: 'find.open',
+        title: 'Find in page',
+        shortcut: '⌘F',
+        enabled: Boolean(activeTab),
+        run: () => ui.setFindOpen(true)
+      },
+      {
+        id: 'history.open',
+        title: 'History',
+        shortcut: '⌘Y',
+        run: () => ui.toggleRightPanel('history')
+      },
+      {
+        id: 'downloads.open',
+        title: 'Downloads',
+        shortcut: '⌘⇧J',
+        run: () => ui.toggleRightPanel('downloads')
+      },
+      {
+        id: 'zoom.in',
+        title: 'Zoom in',
+        shortcut: '⌘+',
+        enabled: Boolean(activeTab),
+        run: withTab((tab) => send('zoom:step', { tabId: tab.id, direction: 'in' }))
+      },
+      {
+        id: 'zoom.out',
+        title: 'Zoom out',
+        shortcut: '⌘-',
+        enabled: Boolean(activeTab),
+        run: withTab((tab) => send('zoom:step', { tabId: tab.id, direction: 'out' }))
+      },
+      {
+        id: 'zoom.reset',
+        title: 'Reset zoom',
+        shortcut: '⌘0',
+        enabled: Boolean(activeTab),
+        run: withTab((tab) => send('zoom:step', { tabId: tab.id, direction: 'reset' }))
+      },
+      {
+        id: 'tab.next',
+        title: 'Next tab',
+        run: () => cycleTab(1)
+      },
+      {
+        id: 'tab.previous',
+        title: 'Previous tab',
+        run: () => cycleTab(-1)
+      },
+      {
+        id: 'workspace.next',
+        title: 'Next workspace',
+        run: () => cycleWorkspace(1)
+      },
+      {
+        id: 'workspace.previous',
+        title: 'Previous workspace',
+        run: () => cycleWorkspace(-1)
+      },
+      {
         id: 'workspace.delete',
         title: 'Delete this workspace',
         enabled: workspaces.length > 1 && Boolean(activeWorkspaceId),
@@ -162,14 +244,48 @@ export function useCommands(): Command[] {
       run: () => applyPreset(preset.id)
     }))
 
-    return [...base, ...presetCommands]
-  }, [activeTab, workspaces.length, activeWorkspaceId, ui, theme, presets, applyPreset, update])
+    /*
+     * Quick actions are commands too, so ⌘K can run "Summarize page" directly.
+     * They open the AI panel first, then fire an event the panel listens for --
+     * the panel owns the provider/model selection, so it has to be the thing
+     * that actually dispatches.
+     */
+    const quickActionCommands = QUICK_ACTIONS.map<Command>((action) => ({
+      id: `ai.${action.id}`,
+      title: action.label,
+      enabled: Boolean(activeTab),
+      run: () => {
+        ui.setRightPanel('ai')
+        window.dispatchEvent(new CustomEvent('radius:quick-action', { detail: action.id }))
+      }
+    }))
+
+    return [...base, ...presetCommands, ...quickActionCommands]
+  }, [activeTab, allTabs, workspaces, activeWorkspaceId, ui, theme, presets, applyPreset, update])
 
   return commands
 }
 
-/** Wires menu accelerators and in-window keys to the registry. */
+/**
+ * Wires menu accelerators and the user's own keybindings to the registry.
+ *
+ * Bindings are read from main rather than hardcoded, so remapping a shortcut in
+ * Settings takes effect without a restart.
+ */
 export function useCommandDispatch(commands: Command[]): void {
+  const [bindings, setBindings] = useState<Record<string, string>>(DEFAULT_KEYBINDINGS)
+
+  useEffect(() => {
+    void bridge.invoke('keybindings:get', {}).then(setBindings)
+    // Settings writes bindings and pushes a snapshot; re-read on every change.
+    return bridge.on('state:changed', (snapshot) => {
+      const stored = snapshot.settings.keybindings
+      if (stored && typeof stored === 'object') {
+        setBindings({ ...DEFAULT_KEYBINDINGS, ...(stored as Record<string, string>) })
+      }
+    })
+  }, [])
+
   useEffect(() => {
     const runById = (id: string): void => {
       const command = commands.find((candidate) => candidate.id === id)
@@ -178,16 +294,14 @@ export function useCommandDispatch(commands: Command[]): void {
 
     const unsubscribe = bridge.on('command:invoke', ({ command }) => runById(command))
 
-    // The native menu owns most accelerators, but it does not fire while focus
-    // is inside the chrome's own inputs -- these two are worth handling here.
     const onKeyDown = (event: KeyboardEvent): void => {
-      const meta = event.metaKey || event.ctrlKey
-      if (meta && event.key.toLowerCase() === 'k') {
+      for (const [commandId, binding] of Object.entries(bindings)) {
+        if (!binding || !matchesBinding(binding, event)) continue
+        const command = commands.find((candidate) => candidate.id === commandId)
+        if (!command || command.enabled === false) continue
         event.preventDefault()
-        runById('palette.open')
-      } else if (meta && event.key.toLowerCase() === 'l') {
-        event.preventDefault()
-        runById('omnibox.focus')
+        command.run()
+        return
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -196,5 +310,5 @@ export function useCommandDispatch(commands: Command[]): void {
       unsubscribe()
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [commands])
+  }, [commands, bindings])
 }

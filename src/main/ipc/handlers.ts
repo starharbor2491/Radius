@@ -13,6 +13,8 @@ import type { RadiusWindow } from '../window/RadiusWindow'
 import type { ProviderRegistry } from '../ai/ProviderRegistry'
 import type { ThemeService } from '../theme/ThemeService'
 import type { PageContextService } from '../page/PageContextService'
+import type { DownloadService } from '../downloads/DownloadService'
+import { DEFAULT_KEYBINDINGS } from '@shared/keybindings'
 import { withContext } from '../ai/context'
 
 export interface AppServices {
@@ -22,6 +24,7 @@ export interface AppServices {
   providers: ProviderRegistry
   theme: ThemeService
   pageContext: PageContextService
+  downloads: DownloadService
 }
 
 const OK = { ok: true } as const
@@ -36,7 +39,7 @@ type HandlerMap = {
 }
 
 export function registerIpcHandlers(services: AppServices): void {
-  const { state, tabs, window, providers, theme, pageContext } = services
+  const { state, tabs, window, providers, theme, pageContext, downloads } = services
 
   const handlers: HandlerMap = {
     'state:get': () => buildState(services),
@@ -160,6 +163,64 @@ export function registerIpcHandlers(services: AppServices): void {
     },
     'window:close': () => {
       window.window.close()
+      return OK
+    },
+
+    /* ------------------------------------------------------------ history */
+    'history:search': ({ query, limit }) => state.searchHistory(query, limit),
+    'history:delete': ({ entryId }) => {
+      state.deleteHistoryEntry(entryId)
+      return OK
+    },
+    'history:clear': ({ sinceMs }) => {
+      state.clearHistory(sinceMs)
+      return OK
+    },
+
+    /* ---------------------------------------------------------- downloads */
+    'downloads:open': async ({ id }) => {
+      await downloads.open(id)
+      return OK
+    },
+    'downloads:reveal': ({ id }) => {
+      downloads.reveal(id)
+      return OK
+    },
+    'downloads:cancel': ({ id }) => {
+      downloads.cancel(id)
+      return OK
+    },
+    'downloads:remove': ({ id }) => {
+      downloads.remove(id)
+      return OK
+    },
+    'downloads:clearFinished': () => {
+      state.clearFinishedDownloads()
+      return OK
+    },
+
+    /* --------------------------------------------------------------- find */
+    'find:start': (payload) => {
+      tabs.find(payload)
+      return OK
+    },
+    'find:stop': ({ tabId, keepSelection }) => {
+      tabs.stopFind(tabId, keepSelection)
+      return OK
+    },
+
+    /* --------------------------------------------------------------- zoom */
+    'zoom:set': ({ tabId, factor }) => ({ factor: tabs.setZoom(tabId, factor) }),
+    'zoom:step': ({ tabId, direction }) => ({ factor: tabs.stepZoom(tabId, direction) }),
+
+    /* -------------------------------------------------------- keybindings */
+    'keybindings:get': () => ({
+      ...DEFAULT_KEYBINDINGS,
+      ...state.getSetting<Record<string, string>>('keybindings', {})
+    }),
+    'keybindings:set': ({ bindings }) => {
+      state.setSetting('keybindings', bindings)
+      state.notify()
       return OK
     },
 

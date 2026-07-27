@@ -13,6 +13,8 @@ const EMPTY_STATE: AppState = {
   activeTabIdByWorkspace: {},
   bookmarks: [],
   bookmarkFolders: [],
+  history: [],
+  downloads: [],
   providers: [],
   settings: {}
 }
@@ -39,8 +41,18 @@ export const useAppStore = create<AppStore>((set) => ({
 export function connectAppStore(): () => void {
   const { setState } = useAppStore.getState()
 
-  const unsubscribe = bridge.on('state:changed', (snapshot) => setState(snapshot))
-  void bridge.invoke('state:get', {}).then(setState)
+  /*
+   * Snapshots are merged over the empty state rather than replacing it. Main
+   * always sends every collection, but during a dev reload the renderer can
+   * briefly be newer than the main bundle it is talking to, and a missing array
+   * would otherwise crash the chrome on first render.
+   */
+  const apply = (snapshot: Partial<AppState>): void => {
+    setState({ ...EMPTY_STATE, ...snapshot })
+  }
+
+  const unsubscribe = bridge.on('state:changed', apply)
+  void bridge.invoke('state:get', {}).then(apply)
 
   return unsubscribe
 }
