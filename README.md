@@ -32,7 +32,36 @@ are implemented. See [ROADMAP.md](ROADMAP.md) for what is done and what is next.
   directory. API keys are encrypted with the OS keychain through Electron's
   `safeStorage` and never cross an IPC boundary. There is no server component.
 
-## Getting started
+## Install on macOS
+
+Paste this into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/starharbor2491/Radius/claude/ai-productivity-browser-plan-fuijdl/scripts/install-mac.sh | bash
+```
+
+Once this branch is merged, the shorter form works instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/starharbor2491/Radius/main/scripts/install-mac.sh | bash
+```
+
+It installs `Radius.app` into your Applications folder and opens it. If a build
+has been published for your Mac it downloads that; otherwise it builds from
+source, which takes a few minutes and needs nothing installed beforehand — even
+Node is fetched to a temporary folder and thrown away afterwards.
+
+Requires macOS 12 or newer. It only asks for your password if your Applications
+folder is not writable by your account.
+
+Radius is **not signed with a paid Apple Developer identity**, so it is ad-hoc
+signed instead. The installer clears the quarantine flag so it opens normally;
+if macOS still objects, right-click the app in Applications and choose Open.
+
+To uninstall: drag Radius out of Applications, and delete
+`~/Library/Application Support/Radius` to remove your data.
+
+## Running from source
 
 ```bash
 npm install
@@ -53,7 +82,8 @@ updates -- `npm install` downloads packages and `npm run dev` opens the browser.
 | `npm run smoke` | Boot the chrome in Electron and assert it renders |
 | `npm run smoke:app` | Boot the whole app, navigate to a page, assert it works |
 | `npm run typecheck` | Typecheck the Node and web projects |
-| `npm run package` | Build and package with electron-builder |
+| `npm run package:mac` | Build a macOS `.app`, `.dmg` and `.zip` |
+| `npm run package` | Build and package for the current platform |
 
 ## Letting the assistant drive
 

@@ -21,7 +21,8 @@
     "test:watch": "vitest",
     "smoke": "electron-vite build && electron --no-sandbox scripts/smoke-renderer.cjs",
     "package": "npm run build && electron-builder",
-    "smoke:app": "electron-vite build && electron --no-sandbox scripts/smoke-app.cjs"
+    "smoke:app": "electron-vite build && electron --no-sandbox scripts/smoke-app.cjs",
+    "package:mac": "electron-vite build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "motion": "^12.42.2",
@@ -45,12 +46,40 @@
   "build": {
     "appId": "dev.radius.browser",
     "productName": "Radius",
+    "copyright": "Radius contributors",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
     "files": [
       "out/**/*",
-      "resources/**/*"
+      "package.json"
     ],
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "writeUpdateInfo": false
     },
     "linux": {
       "target": [
@@ -62,6 +91,7 @@
       "target": [
         "nsis"
       ]
-    }
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
   }
 }
