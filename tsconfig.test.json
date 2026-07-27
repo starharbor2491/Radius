@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node", "vitest/globals"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["src/shared/*"],
+      "@main/*": ["src/main/*"],
+      "@renderer/*": ["src/renderer/*"]
+    }
+  },
+  // Tests reach into both halves of the app, so they get their own project
+  // rather than being folded into the Node or web one.
+  "include": [
+    "tests/**/*.ts",
+    "src/shared/**/*.ts",
+    "src/main/**/*.ts",
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx"
+  ]
+}

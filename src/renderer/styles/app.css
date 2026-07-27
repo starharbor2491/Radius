@@ -1,0 +1,833 @@
+/*
+ * Radius chrome stylesheet.
+ *
+ * Every value here reads a `--rx-*` custom property produced by the token
+ * engine. There are no hardcoded colours, radii, blurs or durations below this
+ * comment -- that constraint is what makes the whole UI retheme at runtime.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  /* The chrome sits under a transparent window; the page view covers the middle. */
+  background: transparent;
+  color: var(--rx-color-text);
+  font-family: var(--rx-font-sans);
+  font-size: var(--rx-text-0);
+  font-weight: var(--rx-weight-normal);
+  line-height: var(--rx-line-height);
+  letter-spacing: var(--rx-tracking-tight);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--rx-color-accent);
+  outline-offset: 2px;
+  border-radius: var(--rx-radius-sm);
+}
+
+/* ------------------------------------------------------------------ *
+ * Glass
+ * ------------------------------------------------------------------ */
+
+.rx-glass {
+  position: relative;
+  border: var(--rx-border-width) solid var(--rx-glass-panel-border);
+  border-radius: var(--rx-radius-lg);
+  background: var(--rx-glass-panel-bg);
+  backdrop-filter: var(--rx-glass-panel-backdrop);
+  -webkit-backdrop-filter: var(--rx-glass-panel-backdrop);
+  box-shadow: var(--rx-glass-panel-shadow), inset 0 1px 0 var(--rx-glass-panel-glow);
+  --rx-surface-noise: var(--rx-glass-panel-noise);
+}
+
+.rx-glass[data-surface='chrome'] {
+  border-color: var(--rx-glass-chrome-border);
+  background: var(--rx-glass-chrome-bg);
+  backdrop-filter: var(--rx-glass-chrome-backdrop);
+  -webkit-backdrop-filter: var(--rx-glass-chrome-backdrop);
+  box-shadow: var(--rx-glass-chrome-shadow), inset 0 1px 0 var(--rx-glass-chrome-glow);
+  --rx-surface-noise: var(--rx-glass-chrome-noise);
+}
+
+.rx-glass[data-surface='popover'] {
+  border-color: var(--rx-glass-popover-border);
+  background: var(--rx-glass-popover-bg);
+  backdrop-filter: var(--rx-glass-popover-backdrop);
+  -webkit-backdrop-filter: var(--rx-glass-popover-backdrop);
+  box-shadow: var(--rx-glass-popover-shadow), inset 0 1px 0 var(--rx-glass-popover-glow);
+  --rx-surface-noise: var(--rx-glass-popover-noise);
+}
+
+.rx-glass[data-surface='overlay'] {
+  border-color: var(--rx-glass-overlay-border);
+  background: var(--rx-glass-overlay-bg);
+  backdrop-filter: var(--rx-glass-overlay-backdrop);
+  -webkit-backdrop-filter: var(--rx-glass-overlay-backdrop);
+  box-shadow: var(--rx-glass-overlay-shadow), inset 0 1px 0 var(--rx-glass-overlay-glow);
+  --rx-surface-noise: var(--rx-glass-overlay-noise);
+}
+
+/*
+ * Film grain. Large backdrop blurs band badly on flat gradients; a few percent
+ * of noise hides it. Pointer-events off so it never eats a click.
+ */
+.rx-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--rx-surface-noise, 0);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ------------------------------------------------------------------ *
+ * Shell layout
+ * ------------------------------------------------------------------ */
+
+.rx-shell {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  height: 100%;
+  width: 100%;
+}
+
+.rx-sidebar {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+}
+
+.rx-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 52px;
+  padding: var(--rx-space-3) 0;
+  flex: none;
+}
+
+.rx-rail-drag {
+  /* Reserve room for macOS traffic lights and give the window a drag handle. */
+  height: 28px;
+  width: 100%;
+  -webkit-app-region: drag;
+  flex: none;
+}
+
+.rx-sidebar-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  padding: var(--rx-space-2) var(--rx-space-2) var(--rx-space-3);
+  gap: var(--rx-space-2);
+}
+
+.rx-sidebar-resize {
+  width: 6px;
+  cursor: col-resize;
+  flex: none;
+  background: transparent;
+  transition: background var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-sidebar-resize:hover,
+.rx-sidebar-resize[data-dragging='true'] {
+  background: var(--rx-color-accent);
+  opacity: 0.35;
+}
+
+.rx-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.rx-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  height: 44px;
+  padding: 0 var(--rx-space-3);
+  flex: none;
+  -webkit-app-region: drag;
+}
+
+.rx-toolbar > * {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * The page WebContentsView covers this region entirely. What renders here is
+ * only visible in the brief moment before a view exists, so it is a deliberate
+ * placeholder rather than dead markup.
+ */
+.rx-viewport {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-right-panel {
+  display: flex;
+  height: 100%;
+  flex: none;
+}
+
+.rx-right-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  padding: var(--rx-space-3);
+  gap: var(--rx-space-3);
+}
+
+/* ------------------------------------------------------------------ *
+ * Controls
+ * ------------------------------------------------------------------ */
+
+.rx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--rx-space-2);
+  height: calc(28px * var(--rx-density));
+  padding: 0 var(--rx-space-3);
+  border: var(--rx-border-width) solid transparent;
+  border-radius: var(--rx-radius-md);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rx-button:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-button[data-variant='primary'] {
+  background: var(--rx-color-accent);
+  color: var(--rx-color-accent-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-button[data-variant='outline'] {
+  border-color: var(--rx-color-border);
+  color: var(--rx-color-text);
+}
+
+.rx-button[data-variant='danger'] {
+  color: var(--rx-color-danger);
+}
+
+.rx-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rx-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: calc(28px * var(--rx-density));
+  height: calc(28px * var(--rx-density));
+  padding: 0;
+  border: none;
+  border-radius: var(--rx-radius-md);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+}
+
+.rx-icon-button:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-icon-button[data-active='true'] {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-accent);
+}
+
+.rx-input {
+  width: 100%;
+  height: calc(30px * var(--rx-density));
+  padding: 0 var(--rx-space-3);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text);
+  user-select: text;
+}
+
+.rx-input::placeholder {
+  color: var(--rx-color-text-faint);
+}
+
+.rx-input:focus-visible {
+  border-color: var(--rx-color-accent);
+  outline: none;
+}
+
+.rx-textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: var(--rx-space-2) var(--rx-space-3);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text);
+  resize: none;
+  user-select: text;
+}
+
+.rx-label {
+  display: block;
+  font-size: var(--rx-text-n1);
+  color: var(--rx-color-text-muted);
+  margin-bottom: var(--rx-space-1);
+}
+
+.rx-section-title {
+  font-size: var(--rx-text-n2);
+  font-weight: var(--rx-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--rx-color-text-faint);
+  padding: var(--rx-space-2) var(--rx-space-2) var(--rx-space-1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Workspace rail
+ * ------------------------------------------------------------------ */
+
+.rx-workspace-chip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: var(--rx-border-width) solid transparent;
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  font-size: var(--rx-text-1);
+}
+
+.rx-workspace-chip[data-active='true'] {
+  border-color: var(--rx-workspace-accent);
+  color: var(--rx-color-text);
+  box-shadow: 0 0 0 1px var(--rx-workspace-accent), 0 0 16px -4px var(--rx-workspace-accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Tab strip
+ * ------------------------------------------------------------------ */
+
+.rx-tabs {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+}
+
+.rx-tabs::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rx-tabs::-webkit-scrollbar-thumb {
+  background: var(--rx-color-border-strong);
+  border-radius: var(--rx-radius-pill);
+}
+
+.rx-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  height: calc(32px * var(--rx-density));
+  padding: 0 var(--rx-space-2);
+  border-radius: var(--rx-radius-md);
+  cursor: pointer;
+  color: var(--rx-color-text-muted);
+  min-width: 0;
+}
+
+.rx-tab[data-active='true'] {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-tab[data-suspended='true'] .rx-tab-title {
+  opacity: 0.55;
+}
+
+.rx-tab[data-dragging='true'] {
+  z-index: 2;
+  box-shadow: var(--rx-elevation-4);
+  background: var(--rx-color-surface-3);
+}
+
+.rx-tab-favicon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--rx-radius-sm);
+  overflow: hidden;
+  font-size: 10px;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-tab-favicon img {
+  width: 16px;
+  height: 16px;
+}
+
+.rx-tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rx-tab-close {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--rx-radius-sm);
+  background: transparent;
+  color: var(--rx-color-text-faint);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.rx-tab:hover .rx-tab-close,
+.rx-tab[data-active='true'] .rx-tab-close {
+  opacity: 1;
+}
+
+.rx-tab-close:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+}
+
+.rx-tab-pin {
+  flex: none;
+  font-size: 9px;
+  color: var(--rx-color-accent);
+}
+
+.rx-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 2px solid var(--rx-group-color);
+  padding-left: var(--rx-space-2);
+  margin: var(--rx-space-1) 0;
+}
+
+.rx-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  height: 24px;
+  padding: 0 var(--rx-space-1);
+  border-radius: var(--rx-radius-sm);
+  cursor: pointer;
+  color: var(--rx-group-color);
+  font-size: var(--rx-text-n1);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-group-header:hover {
+  background: var(--rx-color-surface-1);
+}
+
+.rx-group-caret {
+  display: inline-block;
+  transition: transform var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-group-header[data-collapsed='true'] .rx-group-caret {
+  transform: rotate(-90deg);
+}
+
+/* ------------------------------------------------------------------ *
+ * Omnibox and palette
+ * ------------------------------------------------------------------ */
+
+.rx-omnibox {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.rx-omnibox-input {
+  width: 100%;
+  height: calc(30px * var(--rx-density));
+  padding: 0 var(--rx-space-3);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text);
+  user-select: text;
+}
+
+.rx-omnibox-input:focus-visible {
+  border-color: var(--rx-color-accent);
+  outline: none;
+}
+
+.rx-suggestions {
+  position: absolute;
+  top: calc(100% + var(--rx-space-2));
+  left: 0;
+  right: 0;
+  z-index: 40;
+  padding: var(--rx-space-1);
+  border-radius: var(--rx-radius-lg);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.rx-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-2);
+  border-radius: var(--rx-radius-md);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.rx-suggestion[data-selected='true'] {
+  background: var(--rx-color-surface-2);
+}
+
+.rx-suggestion-kind {
+  flex: none;
+  font-size: var(--rx-text-n2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rx-color-text-faint);
+  width: 56px;
+}
+
+.rx-suggestion-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rx-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: oklch(0 0 0 / 0.28);
+}
+
+.rx-palette {
+  width: min(620px, 84vw);
+  border-radius: var(--rx-radius-xl);
+  overflow: hidden;
+}
+
+.rx-palette-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 var(--rx-space-4);
+  border: none;
+  border-bottom: var(--rx-border-width) solid var(--rx-color-border);
+  background: transparent;
+  color: var(--rx-color-text);
+  font-size: var(--rx-text-1);
+  user-select: text;
+}
+
+.rx-palette-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: var(--rx-space-1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Panels
+ * ------------------------------------------------------------------ */
+
+.rx-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+  flex: none;
+}
+
+.rx-panel-title {
+  font-size: var(--rx-text-1);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-3);
+}
+
+.rx-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+}
+
+.rx-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+}
+
+.rx-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+}
+
+.rx-muted {
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-faint {
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-danger {
+  color: var(--rx-color-danger);
+}
+
+.rx-success {
+  color: var(--rx-color-success);
+}
+
+.rx-card {
+  padding: var(--rx-space-3);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+}
+
+.rx-slider {
+  width: 100%;
+  accent-color: var(--rx-color-accent);
+}
+
+.rx-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--rx-space-2);
+}
+
+.rx-preset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  cursor: pointer;
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  text-align: left;
+}
+
+.rx-preset[data-active='true'] {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-text);
+}
+
+.rx-preset-swatches {
+  display: flex;
+  gap: 3px;
+}
+
+.rx-preset-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--rx-radius-sm);
+  border: 1px solid var(--rx-color-border);
+}
+
+/* ------------------------------------------------------------------ *
+ * Chat
+ * ------------------------------------------------------------------ */
+
+.rx-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--rx-space-2);
+}
+
+.rx-chat-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-3);
+  padding-right: var(--rx-space-1);
+}
+
+.rx-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  user-select: text;
+}
+
+.rx-message-role {
+  font-size: var(--rx-text-n2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-message-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rx-message[data-role='user'] .rx-message-body {
+  padding: var(--rx-space-2) var(--rx-space-3);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-2);
+}
+
+/* The caret that trails streaming output. */
+.rx-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  vertical-align: text-bottom;
+  background: var(--rx-color-accent);
+  border-radius: 1px;
+  animation: rx-blink calc(var(--rx-duration-slow) * 3) steps(2, start) infinite;
+}
+
+@keyframes rx-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.rx-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  padding: 2px var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-pill);
+  font-size: var(--rx-text-n2);
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rx-context-chip[data-on='true'] {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-text);
+}
+
+.rx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--rx-space-6);
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: var(--rx-space-2) var(--rx-space-4);
+  border-radius: var(--rx-radius-pill);
+  font-size: var(--rx-text-n1);
+}
+
+/*
+ * Users who ask the OS for less motion get it, unless they have explicitly
+ * overridden that in Settings (which flips `--rx-motion-enabled` to 1).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
