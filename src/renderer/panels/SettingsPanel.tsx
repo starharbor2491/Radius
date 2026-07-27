@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { Button, Field } from '../ui/primitives'
 import { KeybindingsEditor } from './KeybindingsEditor'
+import { ProviderDirectory } from './ProviderDirectory'
 
 /**
  * Provider setup and browser behaviour.
@@ -63,7 +64,7 @@ export function SettingsPanel(): JSX.Element {
         {providers.map((provider) => (
           <ProviderCard key={provider.id} provider={provider} />
         ))}
-        <AddProviderForms />
+        <ProviderDirectory />
       </section>
     </div>
   )
@@ -170,110 +171,3 @@ function ProviderCard({ provider }: { provider: ProviderStatus }): JSX.Element {
     </div>
   )
 }
-
-/**
- * Tiers 2 and 3, exposed as forms.
- *
- * The OpenAI-compatible path is the one most people need -- it covers Ollama,
- * LM Studio, vLLM and most hosted vendors. The manifest path exists for APIs
- * that fit no standard shape at all.
- */
-function AddProviderForms(): JSX.Element {
-  const [label, setLabel] = useState('')
-  const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1')
-  const [manifestText, setManifestText] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [showManifest, setShowManifest] = useState(false)
-
-  return (
-    <div className="rx-card">
-      <strong>Add a provider</strong>
-
-      <Field label="Name">
-        <input
-          className="rx-input"
-          value={label}
-          placeholder="Ollama, vLLM, a hosted vendor…"
-          onChange={(event) => setLabel(event.target.value)}
-        />
-      </Field>
-
-      <Field label="OpenAI-compatible base URL">
-        <input className="rx-input" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-      </Field>
-
-      <div className="rx-row">
-        <Button
-          variant="primary"
-          disabled={!label.trim() || !baseUrl.trim()}
-          onClick={() => {
-            setError(null)
-            void bridge
-              .invoke('ai:addOpenAiCompatible', { label: label.trim(), baseUrl: baseUrl.trim(), models: [] })
-              .then((created) => bridge.invoke('ai:discoverModels', { providerId: created.id }))
-              .then(() => setLabel(''))
-              .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
-          }}
-        >
-          Add
-        </Button>
-        <Button variant="outline" onClick={() => setShowManifest((current) => !current)}>
-          {showManifest ? 'Hide' : 'Custom API (JSON manifest)'}
-        </Button>
-      </div>
-
-      {showManifest ? (
-        <Field label="Manifest">
-          <textarea
-            className="rx-textarea"
-            style={{ minHeight: 160, fontFamily: 'var(--rx-font-mono)' }}
-            value={manifestText}
-            placeholder={MANIFEST_EXAMPLE}
-            onChange={(event) => setManifestText(event.target.value)}
-          />
-          <Button
-            variant="primary"
-            disabled={!label.trim() || !manifestText.trim()}
-            onClick={() => {
-              setError(null)
-              try {
-                const manifest = JSON.parse(manifestText) as Record<string, unknown>
-                void bridge
-                  .invoke('ai:addManifestProvider', {
-                    label: label.trim(),
-                    // Validated against ProviderManifestSchema on the main side.
-                    manifest: manifest as never,
-                    models: []
-                  })
-                  .then(() => {
-                    setManifestText('')
-                    setLabel('')
-                  })
-                  .catch((cause: unknown) =>
-                    setError(cause instanceof Error ? cause.message : String(cause))
-                  )
-              } catch {
-                setError('That is not valid JSON.')
-              }
-            }}
-          >
-            Add custom provider
-          </Button>
-        </Field>
-      ) : null}
-
-      {error ? <span className="rx-danger">{error}</span> : null}
-    </div>
-  )
-}
-
-const MANIFEST_EXAMPLE = `{
-  "endpoint": "https://api.example.com/v1/chat",
-  "authStyle": "bearer",
-  "authKey": "Authorization",
-  "modelField": "model",
-  "messagesField": "messages",
-  "streamFormat": "sse",
-  "deltaPath": "choices.0.delta.content",
-  "textPath": "choices.0.message.content"
-}`

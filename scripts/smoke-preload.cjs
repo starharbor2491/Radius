@@ -118,6 +118,7 @@ const RESPONSES = {
   'ai:listProviders': [],
   'ai:usage': [],
   'history:search': [],
+  // Empty on purpose: the editor must fall back to its defaults.
   'keybindings:get': {},
   // An empty document: ThemeProvider re-parses it, so this exercises the
   // schema's defaulting path all the way to the CSS variables.

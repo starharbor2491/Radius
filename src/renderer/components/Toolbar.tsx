@@ -112,6 +112,14 @@ export function Toolbar(): JSX.Element {
         ✦
       </IconButton>
       <IconButton
+        aria-label="Agent"
+        title="Let the assistant drive  ⌘⇧A"
+        active={rightPanel === 'agent'}
+        onClick={() => toggleRightPanel('agent')}
+      >
+        ⇱
+      </IconButton>
+      <IconButton
         aria-label="Theme studio"
         title="Theme studio  ⌘⇧,"
         active={rightPanel === 'theme'}

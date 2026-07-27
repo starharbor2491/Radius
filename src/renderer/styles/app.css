@@ -931,3 +931,99 @@ textarea {
     box-shadow: 0 0 0 3px color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Provider directory
+ * ------------------------------------------------------------------ */
+
+.rx-directory-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  padding: var(--rx-space-2);
+  border: none;
+  border-radius: var(--rx-radius-md);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.rx-directory-row:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-directory-row[data-blocked='true'] {
+  opacity: 0.55;
+}
+
+.rx-directory-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-2) var(--rx-space-2) var(--rx-space-3);
+  margin-left: var(--rx-space-2);
+  border-left: 2px solid var(--rx-color-accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Agent
+ * ------------------------------------------------------------------ */
+
+.rx-agent-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  flex: none;
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+}
+
+.rx-agent-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--rx-color-text-faint);
+}
+
+/* Pulses only while the agent is actually doing something. */
+.rx-agent-dot[data-busy='true'] {
+  background: var(--rx-color-accent);
+  animation: rx-agent-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rx-agent-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--rx-color-accent) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.rx-agent-step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-1) 0;
+  user-select: text;
+}
+
+.rx-agent-step-kind {
+  flex: none;
+  width: 54px;
+  font-size: var(--rx-text-n2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rx-color-accent);
+}
+
+.rx-agent-step[data-ok='false'] .rx-agent-step-kind {
+  color: var(--rx-color-danger);
+}

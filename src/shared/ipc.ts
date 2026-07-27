@@ -19,6 +19,7 @@ import {
   WorkspaceSchema
 } from './types'
 import { ThemeSchema } from './theme'
+import { AgentActionSchema, AgentPageMapSchema } from './agent'
 
 /**
  * The single source of truth for the main <-> renderer boundary.
@@ -236,6 +237,23 @@ export const ipcContract = {
     request: z.object({ tabId: IdSchema, direction: z.enum(['in', 'out', 'reset']) }),
     response: z.object({ factor: z.number() })
   },
+
+  /* -------------------------------------------------------------- agent */
+  /**
+   * The assistant drives the page with a real mouse and keyboard, and its
+   * cursor is drawn inside the page so the user can watch it work. `begin`
+   * shows the cursor, `stop` hides it and cancels anything in flight.
+   */
+  'agent:begin': {
+    request: z.object({ tabId: IdSchema, label: z.string().default('Assistant'), accent: z.string() }),
+    response: Ok
+  },
+  'agent:describe': { request: z.object({ tabId: IdSchema }), response: AgentPageMapSchema },
+  'agent:act': {
+    request: z.object({ tabId: IdSchema, action: AgentActionSchema }),
+    response: z.object({ ok: z.boolean(), detail: z.string(), finished: z.boolean().optional() })
+  },
+  'agent:stop': { request: z.object({ tabId: IdSchema }), response: Ok },
 
   /* -------------------------------------------------------- keybindings */
   'keybindings:get': { request: Empty, response: z.record(z.string(), z.string()) },

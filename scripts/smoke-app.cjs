@@ -25,6 +25,8 @@ const PAGE_HTML = `<!doctype html><html><head><title>Radius Test Page</title></h
 <body><main><h1>Hello from a real page</h1>
 <p>The word marmalade appears here. And marmalade again, twice.</p>
 <p>Some further body text so extraction has something to find.</p>
+<input id="field" placeholder="Type here" style="font-size:16px;padding:8px;width:260px">
+<button id="go" style="font-size:16px;padding:8px 16px" onclick="document.title='Clicked by the agent'">Press me</button>
 </main></body></html>`
 
 let server
@@ -200,6 +202,72 @@ async function run() {
     findResult && findResult.matches === 2,
     JSON.stringify(findResult)
   )
+
+  /* ---------------------------------------------------- agent control */
+
+  const pageContents = webContents
+    .getAllWebContents()
+    .find((contents) => contents.getURL().startsWith('http://127.0.0.1'))
+  check('found the page webContents', Boolean(pageContents))
+
+  await chrome.executeJavaScript(
+    `window.radius.invoke('agent:begin', { tabId: ${JSON.stringify(navigated)}, label: 'Assistant', accent: 'oklch(0.70 0.17 285)' })`
+  )
+  await new Promise((resolve) => setTimeout(resolve, 400))
+
+  const cursorPresent = await pageContents.executeJavaScript(
+    `(() => { const h = document.querySelector('[data-radius-agent]'); return h ? h.dataset.visible : null })()`
+  )
+  check('the agent cursor appeared in the page', cursorPresent === 'true', String(cursorPresent))
+
+  const map = await chrome.executeJavaScript(
+    `window.radius.invoke('agent:describe', { tabId: ${JSON.stringify(navigated)} })`
+  )
+  const buttonIndex = map.elements.findIndex((el) => el.label === 'Press me')
+  const fieldIndex = map.elements.findIndex((el) => el.tag === 'input')
+  check(
+    'the agent sees the page elements',
+    buttonIndex !== -1 && fieldIndex !== -1,
+    JSON.stringify(map.elements.map((e) => e.label))
+  )
+
+  // Typing: click the field, then send characters as a person would.
+  const typed = await chrome.executeJavaScript(
+    `window.radius.invoke('agent:act', { tabId: ${JSON.stringify(navigated)}, action: { kind: 'type', text: 'hello agent', index: ${fieldIndex} } })`
+  )
+  check('the type action reported success', typed.ok, typed.detail)
+  const fieldValue = await pageContents.executeJavaScript(`document.getElementById('field').value`)
+  check('the keyboard actually typed into the page', fieldValue === 'hello agent', String(fieldValue))
+
+  // Clicking: the button rewrites document.title, so the effect is observable.
+  const clicked = await chrome.executeJavaScript(
+    `window.radius.invoke('agent:act', { tabId: ${JSON.stringify(navigated)}, action: { kind: 'click', index: ${buttonIndex} } })`
+  )
+  check('the click action reported success', clicked.ok, clicked.detail)
+  const newTitle = await pageContents.executeJavaScript(`document.title`)
+  check('the mouse actually clicked the button', newTitle === 'Clicked by the agent', newTitle)
+
+  const cursorMoved = await pageContents.executeJavaScript(
+    `(() => { const h = document.querySelector('[data-radius-agent]'); return { x: Number(h.dataset.x), y: Number(h.dataset.y) } })()`
+  )
+  check(
+    'the cursor moved to what it clicked',
+    cursorMoved.x > 0 && cursorMoved.y > 0,
+    JSON.stringify(cursorMoved)
+  )
+
+  // Capture the page itself, cursor and all, before hiding it again.
+  const pageShot = await pageContents.capturePage()
+  writeFileSync(OUTPUT.replace(/\.png$/, '-agent.png'), pageShot.toPNG())
+
+  await chrome.executeJavaScript(
+    `window.radius.invoke('agent:stop', { tabId: ${JSON.stringify(navigated)} })`
+  )
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const cursorHidden = await pageContents.executeJavaScript(
+    `document.querySelector('[data-radius-agent]').dataset.visible`
+  )
+  check('stopping hides the cursor', cursorHidden === 'false', String(cursorHidden))
 
   check('no renderer console errors', consoleErrors.length === 0, consoleErrors.join(' | '))
 

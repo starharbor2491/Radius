@@ -21,6 +21,7 @@ export const DEFAULT_KEYBINDINGS: Record<string, string> = {
   'sidebar.toggle': 'Mod+B',
   'ai.toggle': 'Mod+J',
   'ai.summarize': 'Mod+Shift+S',
+  'agent.toggle': 'Mod+Shift+A',
   'history.open': 'Mod+Y',
   'downloads.open': 'Mod+Shift+J',
   'bookmark.add': 'Mod+D',

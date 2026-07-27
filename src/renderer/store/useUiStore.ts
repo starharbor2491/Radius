@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import { send } from '../lib/bridge'
 
-export type RightPanel = 'none' | 'ai' | 'settings' | 'theme' | 'history' | 'downloads'
+export type RightPanel =
+  | 'none'
+  | 'ai'
+  | 'agent'
+  | 'settings'
+  | 'theme'
+  | 'history'
+  | 'downloads'
 
 interface UiStore {
   sidebarOpen: boolean

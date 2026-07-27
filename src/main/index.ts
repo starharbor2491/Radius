@@ -7,6 +7,7 @@ import { ProviderRegistry } from './ai/ProviderRegistry'
 import { ThemeService } from './theme/ThemeService'
 import { PageContextService } from './page/PageContextService'
 import { DownloadService } from './downloads/DownloadService'
+import { AgentController } from './agent/AgentController'
 import { RadiusWindow } from './window/RadiusWindow'
 import { TabManager } from './tabs/TabManager'
 import { buildState, registerIpcHandlers, type AppServices } from './ipc/handlers'
@@ -107,6 +108,7 @@ function bootstrap(): void {
   const pageContext = new PageContextService()
   const downloads = new DownloadService(state, PARTITION)
   downloads.attach()
+  const agent = new AgentController()
 
   // The window's page-view callbacks need the TabManager, which needs the
   // window. The indirection through `tabs` resolves that cycle: nothing fires
@@ -131,7 +133,7 @@ function bootstrap(): void {
     radius: activeTheme.geometry.pageRadius
   })
 
-  services = { state, tabs, window, providers, theme, pageContext, downloads }
+  services = { state, tabs, window, providers, theme, pageContext, downloads, agent }
   registerIpcHandlers(services)
 
   state.subscribe((snapshot) => {

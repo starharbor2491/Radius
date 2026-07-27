@@ -22,6 +22,7 @@ const COMMAND_LABELS: Record<string, string> = {
   'sidebar.toggle': 'Toggle sidebar',
   'ai.toggle': 'Toggle AI panel',
   'ai.summarize': 'Summarize page',
+  'agent.toggle': 'Assistant drives the page',
   'history.open': 'History',
   'downloads.open': 'Downloads',
   'bookmark.add': 'Bookmark this page',
@@ -50,7 +51,12 @@ export function KeybindingsEditor(): JSX.Element {
   const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
 
   useEffect(() => {
-    void bridge.invoke('keybindings:get', {}).then(setBindings)
+    // Merge over the defaults rather than replacing them: a stored map only
+    // holds what the user changed, so trusting it wholesale would show every
+    // untouched command as unassigned.
+    void bridge
+      .invoke('keybindings:get', {})
+      .then((stored) => setBindings({ ...DEFAULT_KEYBINDINGS, ...stored }))
   }, [])
 
   useEffect(() => {

@@ -35,6 +35,15 @@ the generic tiers nearly free.
 - Remappable keyboard shortcuts with conflict detection
 - Tab and workspace cycling
 
+## M1.6 — Provider directory and the agent ✅
+
+- A directory of ~30 providers with endpoints pre-filled, so adding OpenRouter,
+  DeepSeek, Moonshot, DeepInfra, Databricks or a local Ollama is pick-and-paste
+- Providers that cannot work with an API key alone (Bedrock's SigV4, Vertex's
+  OAuth) are listed with the reason rather than silently missing
+- An agent that drives the page with real mouse and keyboard input, with a
+  visible labelled cursor drawn inside the page, a step cap, and a stop button
+
 ## M2 — AI depth
 
 - Routing rules: per-feature model assignment with ordered fallback chains on
@@ -44,7 +53,8 @@ the generic tiers nearly free.
 - Tool calling and reasoning-token handling in the native adapters
 - Budgets and alerts on the cost meter
 - Per-site zoom and permission memory
-- Bounded page agent (fill, click, navigate) with per-step confirmation
+- Agent: per-step confirmation mode, navigation actions, multi-tab tasks
+- AWS SigV4 signing and Vertex OAuth, to unblock those two providers
 
 ## M3 — Customization surfaces
 

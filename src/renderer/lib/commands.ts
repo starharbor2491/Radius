@@ -137,6 +137,12 @@ export function useCommands(): Command[] {
       { id: 'sidebar.toggle', title: 'Toggle sidebar', shortcut: '⌘B', run: ui.toggleSidebar },
       { id: 'bookmarks.toggle', title: 'Toggle bookmarks', run: ui.toggleBookmarks },
       { id: 'ai.toggle', title: 'Toggle AI panel', shortcut: '⌘J', run: () => ui.toggleRightPanel('ai') },
+      {
+        id: 'agent.toggle',
+        title: 'Let the assistant drive this page',
+        shortcut: '⌘⇧A',
+        run: () => ui.toggleRightPanel('agent')
+      },
       { id: 'theme.open', title: 'Theme studio', shortcut: '⌘⇧,', run: () => ui.toggleRightPanel('theme') },
       { id: 'settings.open', title: 'Settings', run: () => ui.toggleRightPanel('settings') },
       {

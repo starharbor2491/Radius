@@ -14,6 +14,7 @@ import type { ProviderRegistry } from '../ai/ProviderRegistry'
 import type { ThemeService } from '../theme/ThemeService'
 import type { PageContextService } from '../page/PageContextService'
 import type { DownloadService } from '../downloads/DownloadService'
+import type { AgentController } from '../agent/AgentController'
 import { DEFAULT_KEYBINDINGS } from '@shared/keybindings'
 import { withContext } from '../ai/context'
 
@@ -25,6 +26,7 @@ export interface AppServices {
   theme: ThemeService
   pageContext: PageContextService
   downloads: DownloadService
+  agent: AgentController
 }
 
 const OK = { ok: true } as const
@@ -39,7 +41,13 @@ type HandlerMap = {
 }
 
 export function registerIpcHandlers(services: AppServices): void {
-  const { state, tabs, window, providers, theme, pageContext, downloads } = services
+  const { state, tabs, window, providers, theme, pageContext, downloads, agent } = services
+
+  /** The agent needs the live view plus its zoom, to convert coordinates. */
+  const agentTarget = (tabId: string) => ({
+    contents: window.getView(tabId)?.webContents,
+    zoom: state.getRuntime(tabId).zoom
+  })
 
   const handlers: HandlerMap = {
     'state:get': () => buildState(services),
@@ -212,6 +220,18 @@ export function registerIpcHandlers(services: AppServices): void {
     /* --------------------------------------------------------------- zoom */
     'zoom:set': ({ tabId, factor }) => ({ factor: tabs.setZoom(tabId, factor) }),
     'zoom:step': ({ tabId, direction }) => ({ factor: tabs.stepZoom(tabId, direction) }),
+
+    /* -------------------------------------------------------------- agent */
+    'agent:begin': ({ tabId, label, accent }) => {
+      agent.begin(agentTarget(tabId), label, accent)
+      return OK
+    },
+    'agent:describe': ({ tabId }) => agent.describe(agentTarget(tabId)),
+    'agent:act': ({ tabId, action }) => agent.perform(agentTarget(tabId), action),
+    'agent:stop': ({ tabId }) => {
+      agent.stop(agentTarget(tabId))
+      return OK
+    },
 
     /* -------------------------------------------------------- keybindings */
     'keybindings:get': () => ({

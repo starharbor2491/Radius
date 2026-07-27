@@ -14,6 +14,7 @@ main process (Node)
 ├── SecretStore       safeStorage-encrypted API keys
 ├── ThemeService      theme persistence and file import/export
 ├── DownloadService   tracks transfers started by page content
+├── AgentController   synthetic mouse/keyboard, visible cursor, element map
 └── PageContextService  readable-text extraction for the AI panel
 ```
 
@@ -198,6 +199,31 @@ actually disables it instead of merely shortening it.
 Colours are OKLCH strings. `src/shared/color.ts` implements OKLCH → linear sRGB
 and WCAG contrast so the Theme Studio can warn about a failing pair — a browser's
 computed style cannot answer that question for a colour you have not applied yet.
+
+## The agent
+
+The assistant can drive a page. Three decisions make it work:
+
+**Real input events, not synthetic clicks.** `webContents.sendInputEvent`
+rather than calling `element.click()` from the preload. Synthetic DOM clicks
+are untrusted events that plenty of sites ignore, and they cannot type into a
+React-controlled input convincingly. Real events behave exactly like a person's.
+
+**The cursor is drawn inside the page.** The page is a native view stacked
+above the chrome, so anything the chrome painted would be hidden behind it. The
+page preload owns a `pointer-events: none` overlay in a closed shadow root, so
+page CSS cannot restyle it and it never intercepts a click meant for the page.
+
+**JSON actions, not provider tool-calls.** Tool-calling APIs differ per vendor
+and are missing from many OpenAI-compatible endpoints. Asking any model for one
+JSON object per step is what makes the agent work on *every* provider rather
+than the three with the richest API. `parseAgentAction` digs the object out of
+prose and code fences, because models add commentary regardless of instructions.
+
+The safety properties are structural rather than advisory: the cursor is always
+visible while acting, it glides rather than teleports, only viewport-visible
+elements are offered to the model, runs are capped at `MAX_AGENT_STEPS`, Stop
+cancels mid-action, and the system prompt refuses credentials and checkout.
 
 ## Find in page
 

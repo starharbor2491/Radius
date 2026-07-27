@@ -10,6 +10,7 @@ import { Toolbar } from './components/Toolbar'
 import { CommandPalette } from './components/CommandPalette'
 import { FindBar } from './components/FindBar'
 import { ChatPanel } from './panels/ChatPanel'
+import { AgentPanel } from './panels/AgentPanel'
 import { HistoryPanel } from './panels/HistoryPanel'
 import { DownloadsPanel } from './panels/DownloadsPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
@@ -18,6 +19,7 @@ import { IconButton, Toast } from './ui/primitives'
 
 const PANEL_TITLES: Record<string, string> = {
   ai: 'Assistant',
+  agent: 'Working alongside you',
   settings: 'Settings',
   theme: 'Theme studio',
   history: 'History',
@@ -141,6 +143,7 @@ export function App(): JSX.Element {
               </div>
 
               {rightPanel === 'ai' ? <ChatPanel /> : null}
+              {rightPanel === 'agent' ? <AgentPanel /> : null}
               {rightPanel === 'settings' ? <SettingsPanel /> : null}
               {rightPanel === 'theme' ? <ThemeStudio /> : null}
               {rightPanel === 'history' ? <HistoryPanel /> : null}
