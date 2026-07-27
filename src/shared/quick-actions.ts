@@ -14,8 +14,13 @@ export interface QuickAction {
   /** Short description shown in the palette and on hover. */
   hint: string
   icon: string
-  /** What the action needs in order to be useful. */
-  needs: 'page' | 'selection'
+  /**
+   * What the action needs in order to be useful.
+   *
+   * `workspace` pulls in every open tab rather than just the current one, which
+   * is the difference between "summarise this" and "what did I have open".
+   */
+  needs: 'page' | 'selection' | 'workspace'
   /** Rendered into a user turn, with the page context attached separately. */
   prompt: (input: { title: string; url: string; selection: string }) => string
 }
@@ -81,6 +86,30 @@ export const QUICK_ACTIONS: QuickAction[] = [
     prompt: ({ title }) =>
       `Reading "${title}": what important context, caveats or counterpoints does this page ` +
       `leave out? Be specific and brief. If it is even-handed already, say so.`
+  },
+
+  /* --------------------------------------------- across the whole workspace */
+  {
+    id: 'workspace-summary',
+    label: 'Summarize all tabs',
+    hint: 'What is open across this workspace',
+    icon: '≣',
+    needs: 'workspace',
+    prompt: () =>
+      `Below are all the pages currently open in this workspace. Give me a short summary of ` +
+      `what I appear to be working on, then one line per page saying what it is. Group them if ` +
+      `there is an obvious grouping. Ignore pages that are only navigation or boilerplate.`
+  },
+  {
+    id: 'workspace-question',
+    label: 'Ask across tabs',
+    hint: 'Answer using every open tab',
+    icon: '⌕',
+    needs: 'workspace',
+    prompt: () =>
+      `Answer using the open pages below. Cite which page each part of the answer came from by ` +
+      `its title. If the pages do not contain the answer, say so rather than filling the gap ` +
+      `from memory.`
   }
 ]
 

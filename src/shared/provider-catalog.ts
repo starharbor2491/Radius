@@ -426,6 +426,30 @@ export function resolveBaseUrl(entry: CatalogEntry, values: Record<string, strin
   return resolved.includes('{') ? null : resolved
 }
 
+/**
+ * Which adapter a catalogue entry runs through, if any.
+ *
+ * `native` entries name a hand-written adapter; everything else with a fixed
+ * base URL goes through the OpenAI-compatible one.
+ */
+export function adapterIdFor(entry: CatalogEntry): string | null {
+  return entry.kind === 'native' ? entry.id : null
+}
+
+/**
+ * The entries the registry seeds on first run.
+ *
+ * Every provider Radius can actually reach shows up in Settings from the
+ * start, rather than only the three with hand-written adapters. Templated
+ * entries are excluded because their URL is incomplete until the user fills it
+ * in, and blocked ones because they cannot work at all yet.
+ */
+export function seedableCatalogEntries(): CatalogEntry[] {
+  return PROVIDER_CATALOG.filter(
+    (entry) => entry.baseUrl !== null && entry.kind !== 'blocked' && entry.kind !== 'templated'
+  )
+}
+
 /** Catalogue entries grouped for display, preserving the declared order. */
 export function catalogByCategory(): Array<[CatalogEntry['category'], CatalogEntry[]]> {
   const order: Array<CatalogEntry['category']> = [

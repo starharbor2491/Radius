@@ -97,8 +97,14 @@ export const anthropicAdapter: ProviderAdapter = {
           break
         }
         case 'content_block_delta': {
-          const delta = payload.delta as { type?: string; text?: string } | undefined
+          const delta = payload.delta as
+            | { type?: string; text?: string; thinking?: string }
+            | undefined
           if (delta?.type === 'text_delta' && delta.text) yield { text: delta.text }
+          // Extended thinking arrives as its own delta type, before the answer.
+          else if (delta?.type === 'thinking_delta' && delta.thinking) {
+            yield { reasoning: delta.thinking }
+          }
           break
         }
         case 'message_delta': {

@@ -3,8 +3,10 @@ import {
   CATEGORY_LABELS,
   PROVIDER_CATALOG,
   catalogByCategory,
+  adapterIdFor,
   findCatalogEntry,
-  resolveBaseUrl
+  resolveBaseUrl,
+  seedableCatalogEntries
 } from '@shared/provider-catalog'
 
 describe('the catalogue', () => {
@@ -93,5 +95,46 @@ describe('resolveBaseUrl', () => {
   it('returns null until every placeholder is filled', () => {
     expect(resolveBaseUrl(databricks, {})).toBeNull()
     expect(resolveBaseUrl(databricks, { workspace: '   ' })).toBeNull()
+  })
+})
+
+describe('seeding', () => {
+  it('seeds every provider that can actually be reached', () => {
+    const seeded = seedableCatalogEntries()
+    // The three with hand-written adapters, plus every fixed-URL endpoint.
+    for (const id of [
+      'anthropic',
+      'openai',
+      'google',
+      'xai',
+      'deepseek',
+      'openrouter',
+      'fireworks',
+      'deepinfra',
+      'cerebras',
+      'groq',
+      'ollama'
+    ]) {
+      expect(
+        seeded.some((entry) => entry.id === id),
+        `${id} should be seeded`
+      ).toBe(true)
+    }
+  })
+
+  it('leaves out entries whose URL is not yet known', () => {
+    const ids = seedableCatalogEntries().map((entry) => entry.id)
+    // Templated: the user has to supply a workspace or resource name first.
+    expect(ids).not.toContain('databricks')
+    expect(ids).not.toContain('azure-openai')
+    // Blocked: no API-key path at all.
+    expect(ids).not.toContain('bedrock')
+    expect(ids).not.toContain('vertex')
+  })
+
+  it('routes only the native entries to a hand-written adapter', () => {
+    expect(adapterIdFor(findCatalogEntry('anthropic')!)).toBe('anthropic')
+    expect(adapterIdFor(findCatalogEntry('google')!)).toBe('google')
+    expect(adapterIdFor(findCatalogEntry('openrouter')!)).toBeNull()
   })
 })

@@ -69,7 +69,13 @@ export function createOpenAiCompatibleAdapter(id: string, label: string): Provid
         if (event.data === '[DONE]') break
         const payload = safeJsonParse(event.data) as
           | {
-              choices?: Array<{ delta?: { content?: string | null } }>
+              choices?: Array<{
+                delta?: {
+                  content?: string | null
+                  reasoning_content?: string | null
+                  reasoning?: string | null
+                }
+              }>
               usage?: { prompt_tokens?: number; completion_tokens?: number }
               error?: { message?: string }
             }
@@ -77,8 +83,12 @@ export function createOpenAiCompatibleAdapter(id: string, label: string): Provid
         if (!payload) continue
         if (payload.error) throw new Error(payload.error.message ?? `${label} stream error`)
 
-        const text = payload.choices?.[0]?.delta?.content
-        if (text) yield { text }
+        const delta = payload.choices?.[0]?.delta
+        if (delta?.content) yield { text: delta.content }
+        // No agreed field name for reasoning across OpenAI-compatible servers:
+        // DeepSeek uses reasoning_content, others use reasoning.
+        const reasoning = delta?.reasoning_content ?? delta?.reasoning
+        if (reasoning) yield { reasoning }
 
         if (payload.usage) {
           usage = {
