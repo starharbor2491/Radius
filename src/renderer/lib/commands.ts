@@ -193,6 +193,11 @@ export function useCommands(): Command[] {
         run: () => ui.toggleRightPanel('downloads')
       },
       {
+        id: 'usage.open',
+        title: 'AI usage and budget',
+        run: () => ui.toggleRightPanel('usage')
+      },
+      {
         id: 'zoom.in',
         title: 'Zoom in',
         shortcut: '⌘+',

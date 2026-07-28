@@ -46,12 +46,21 @@ the generic tiers nearly free.
 
 ## M2 — AI depth
 
+Done:
+
+- Every reachable provider seeded at first launch, key-away from usable, with
+  discovery firing the moment a key is saved
 - Routing rules: per-feature model assignment with ordered fallback chains on
-  error and rate limit
-- Selection actions — explain, translate, rewrite, extract to note
+  error and rate limit, and a hard rule against switching provider once a token
+  has been shown
+- Budgets and alerts on the cost meter, with a usage panel and warn/block modes
+- Selection actions — explain, translate, simplify
 - Whole-workspace Q&A across open tabs
-- Tool calling and reasoning-token handling in the native adapters
-- Budgets and alerts on the cost meter
+- Reasoning-token streaming, shown collapsed and kept out of the answer
+
+Still open:
+
+- Tool calling in the native adapters
 - Per-site zoom and permission memory
 - Agent: per-step confirmation mode, navigation actions, multi-tab tasks
 - AWS SigV4 signing and Vertex OAuth, to unblock those two providers

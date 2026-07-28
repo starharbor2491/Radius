@@ -20,6 +20,8 @@ import {
 } from './types'
 import { ThemeSchema } from './theme'
 import { AgentActionSchema, AgentPageMapSchema } from './agent'
+import { RoutingConfigSchema } from './routing'
+import { BudgetConfigSchema } from './budget'
 
 /**
  * The single source of truth for the main <-> renderer boundary.
@@ -326,7 +328,19 @@ export const ipcContract = {
   'ai:usage': {
     request: z.object({ sinceMs: z.number().int().optional() }),
     response: z.array(UsageRecordSchema)
-  }
+  },
+
+  /* --------------------------------------------------- routing & budget */
+  /**
+   * Per-feature model routing. The config carries provider and model ids only:
+   * like everything else crossing this boundary it names credentials, never
+   * carries them.
+   */
+  'ai:getRouting': { request: Empty, response: RoutingConfigSchema },
+  'ai:setRouting': { request: z.object({ config: RoutingConfigSchema }), response: Ok },
+  /** Monthly spend cap over recorded usage. */
+  'ai:getBudget': { request: Empty, response: BudgetConfigSchema },
+  'ai:setBudget': { request: z.object({ config: BudgetConfigSchema }), response: Ok }
 } as const satisfies Record<string, { request: z.ZodType; response: z.ZodType }>
 
 export type IpcContract = typeof ipcContract

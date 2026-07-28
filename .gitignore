@@ -8,3 +8,6 @@ release/
 .env.*
 !.env.example
 coverage/
+
+# Smoke-test screenshots, written into the repo root by the smoke scripts.
+smoke*.png

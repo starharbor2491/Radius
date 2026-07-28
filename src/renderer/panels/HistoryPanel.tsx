@@ -5,6 +5,7 @@ import { displayHost } from '@shared/url'
 import { useActiveTab, useAppStore } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Button } from '../ui/primitives'
 
 /** Buckets for the day dividers, newest first. */
@@ -99,7 +100,7 @@ export function HistoryPanel(): JSX.Element {
                   send('history:delete', { entryId: entry.id })
                 }}
               >
-                ✕
+                <Icon name="close" size={12} />
               </button>
             </motion.div>
           ))}
@@ -111,9 +112,11 @@ export function HistoryPanel(): JSX.Element {
           variant="outline"
           onClick={() => send('history:clear', { sinceMs: Date.now() - 3_600_000 })}
         >
+          <Icon name="history" size={14} />
           Clear last hour
         </Button>
         <Button variant="danger" onClick={() => send('history:clear', { sinceMs: null })}>
+          <Icon name="trash" size={14} />
           Clear all
         </Button>
       </div>

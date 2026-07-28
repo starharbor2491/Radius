@@ -136,6 +136,36 @@ async function run() {
   )
   check('keybindings loaded from the real store', bindings > 20, String(bindings))
 
+  /*
+   * Seeding used to cover only the three native adapters, two of which ship no
+   * default models -- so a fresh install offered exactly one provider. This
+   * asserts the whole catalogue lands, and that no key leaks out with it.
+   */
+  const seeded = await chrome.executeJavaScript(`(async () => {
+    const state = await window.radius.invoke('state:get', {})
+    const providers = state.providers
+    const want = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'openrouter',
+                  'fireworks', 'deepinfra', 'cerebras', 'groq', 'mistral', 'moonshot']
+    return {
+      count: providers.length,
+      missing: want.filter((id) => !providers.some((p) => p.id === id)),
+      leaked: providers.filter((p) => 'apiKey' in p || 'key' in p).map((p) => p.id),
+      unreachable: providers.filter((p) => p.tier !== 'native' && !p.baseUrl).map((p) => p.id)
+    }
+  })()`)
+  check('the whole provider catalogue seeded', seeded.count >= 25, `saw ${seeded.count}`)
+  check(
+    'every provider the user named is present',
+    seeded.missing.length === 0,
+    `missing ${seeded.missing.join(', ')}`
+  )
+  check('no key crossed IPC with the provider list', seeded.leaked.length === 0, String(seeded.leaked))
+  check(
+    'every seeded non-native provider has an endpoint',
+    seeded.unreachable.length === 0,
+    String(seeded.unreachable)
+  )
+
   const zoom = await chrome.executeJavaScript(`(async () => {
     const state = await window.radius.invoke('state:get', {})
     const tab = state.tabs[0]
@@ -202,6 +232,40 @@ async function run() {
     findResult && findResult.matches === 2,
     JSON.stringify(findResult)
   )
+
+  /* ------------------------------------------------- chrome vs page view */
+
+  // The page view must not cover the chrome. This shipped broken once: App
+  // measured a `display: contents` wrapper, whose rect is all zeros, so the
+  // left inset arrived as 0 and the page sat on top of the sidebar.
+  const chromeBox = await chrome.executeJavaScript(`(() => {
+    const sidebar = document.querySelector('.rx-sidebar')
+    const toolbar = document.querySelector('.rx-toolbar')
+    return {
+      sidebarWidth: sidebar ? Math.round(sidebar.getBoundingClientRect().width) : 0,
+      toolbarHeight: toolbar ? Math.round(toolbar.getBoundingClientRect().height) : 0
+    }
+  })()`)
+  check('the sidebar has a real width', chromeBox.sidebarWidth > 100, JSON.stringify(chromeBox))
+
+  const pageView = BaseWindow.getAllWindows()[0]
+    .contentView.children.find((view) => view.webContents
+      && view.webContents.getURL().startsWith('http://127.0.0.1'))
+  const bounds = pageView ? pageView.getBounds() : null
+  check('the page view exists', Boolean(bounds), String(bounds))
+
+  if (bounds) {
+    check(
+      'the page view starts to the right of the sidebar',
+      bounds.x >= chromeBox.sidebarWidth,
+      `page x=${bounds.x}, sidebar width=${chromeBox.sidebarWidth}`
+    )
+    check(
+      'the page view starts below the toolbar',
+      bounds.y >= chromeBox.toolbarHeight,
+      `page y=${bounds.y}, toolbar height=${chromeBox.toolbarHeight}`
+    )
+  }
 
   /* ---------------------------------------------------- agent control */
 

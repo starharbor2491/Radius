@@ -107,10 +107,23 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        /*
+         * The track paints its filled portion from this percentage. A range
+         * input has no element to size, so the position has to reach CSS as a
+         * custom property.
+         */
+        style={{ ['--rx-slider-fill' as string]: `${fillPercent(value, min, max)}%` }}
         onChange={(event) => onChange(Number.parseFloat(event.target.value))}
       />
     </div>
   )
+}
+
+/** Where the thumb sits, 0..100. A zero-width range would divide by zero. */
+function fillPercent(value: number, min: number, max: number): number {
+  if (!(max > min)) return 0
+  const ratio = (value - min) / (max - min)
+  return Math.min(100, Math.max(0, ratio * 100))
 }
 
 export function Toast({ message }: { message: string | null }): JSX.Element {

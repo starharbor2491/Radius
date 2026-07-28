@@ -160,6 +160,20 @@ churn constantly, so the OpenAI and Google adapters ship no default list and
 call `/v1/models` and `/v1beta/models` instead. A stale hardcoded list is worse
 than an empty one.
 
+**Every reachable provider is seeded at first launch.** `seedBuiltIns` walks
+`seedableCatalogEntries()` rather than the three native adapters, so OpenAI,
+Gemini, Grok, DeepSeek, OpenRouter, Fireworks, DeepInfra, Cerebras and the rest
+are on the list from the start, each one a pasted key away from working.
+
+The two rules above collide in a way worth stating: a seeded provider has no
+models until discovery runs, and discovery needs a key. Earlier builds resolved
+that by hiding model-less providers from the pickers, which meant a browser
+shipping thirty providers offered exactly one — Anthropic, the only adapter with
+a default list. Now `setKey` kicks off discovery itself, and `ModelPicker`
+degrades to a typed model id plus a Discover button rather than hiding the
+provider. Removing a seeded provider records it under `aiDismissedProviders`, or
+the next boot would seed it straight back.
+
 **Cost** is computed from published pricing when it is known and reported as
 zero when it is not. The meter never invents a figure.
 
@@ -167,6 +181,34 @@ zero when it is not. The meter never invents a figure.
 HTTP happens in main. The renderer learns only that a provider `hasKey`, never
 what the key is. On a Linux box with no keychain, `SecretStore` refuses to store
 anything rather than implying a guarantee it cannot keep.
+
+### Routing and budgets
+
+`src/shared/routing.ts` holds two pure ideas that `ProviderRegistry.run` walks:
+*which* provider+model pairs a feature should try, in order, and *whether* a
+given failure is worth trying the next one for.
+
+Failing over is deliberately narrow. A rate limit (429), a server fault (5xx), a
+request timeout or a dead socket means the provider could not answer *this
+time*, so the next candidate gets a turn. A 401, 403 or 400 means the request
+itself was refused — a missing key, a malformed body, a model id that does not
+exist — and handing the same request to the next provider would spend its quota
+to produce the same error with the original hidden behind it. Anything
+unrecognised does not fail over: a chain is a resilience feature, not a reason
+to fan an unknown fault across every provider a user owns.
+
+The hard rule is that **a run never fails over once a token has been emitted**.
+A half-written answer must not get a second author; the user would read one
+paragraph from one model continued by another with no seam to see. A fallback
+that does happen is announced as a `notice` stream event, because the answer
+came from somewhere other than what the dropdown says.
+
+`src/shared/budget.ts` evaluates recorded usage against a monthly limit and
+returns `ok` / `warn` / `over`; `over` plus the `block` action stops a run
+before the provider is called. Because `estimateCost` reports zero for a model
+with no published pricing, this is a bound on *tracked* spend, and every surface
+that shows it says so — the usage panel names how many runs were unpriced rather
+than letting the total imply completeness.
 
 ### Page context
 

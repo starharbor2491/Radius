@@ -6,6 +6,7 @@ import { displayHost } from '@shared/url'
 import { buildStrip, useActiveTab, useWorkspaceGroups, useWorkspaceTabs } from '../store/useAppStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Spinner } from '../ui/primitives'
 
 /** One draggable line in the strip, flattened from the nested group rendering. */
@@ -264,8 +265,16 @@ function TabItem({
 
       <span className="rx-tab-title">{tab.title || displayHost(tab.url) || 'New tab'}</span>
 
-      {tab.pinned ? <span className="rx-tab-pin">●</span> : null}
-      {tab.inAiContext ? <span className="rx-tab-pin" title="In AI context">✦</span> : null}
+      {tab.pinned ? (
+        <span className="rx-tab-pin">
+          <Icon name="pin" size={12} />
+        </span>
+      ) : null}
+      {tab.inAiContext ? (
+        <span className="rx-tab-pin" title="In AI context">
+          <Icon name="sparkle" size={12} />
+        </span>
+      ) : null}
 
       <button
         className="rx-tab-close"
@@ -277,7 +286,7 @@ function TabItem({
           send('tabs:close', { tabId: tab.id })
         }}
       >
-        ✕
+        <Icon name="close" size={12} />
       </button>
     </motion.div>
   )
@@ -301,7 +310,9 @@ function GroupHeader({ group, count }: { group: TabGroup; count: number }): JSX.
         if (next) send('groups:update', { groupId: group.id, color: next })
       }}
     >
-      <span className="rx-group-caret">▾</span>
+      <span className="rx-group-caret">
+        <Icon name="chevron-down" size={14} />
+      </span>
       <span className="rx-tab-title">{group.title}</span>
       <span className="rx-faint">{count}</span>
     </div>

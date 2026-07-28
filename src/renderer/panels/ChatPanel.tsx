@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { motion } from 'motion/react'
 import type { ChatMessage } from '@shared/types'
 import { displayHost } from '@shared/url'
 import { QUICK_ACTIONS, type QuickAction } from '@shared/quick-actions'
-import { useActiveTab, useAppStore, useWorkspaceTabs } from '../store/useAppStore'
+import { useActiveTab, useWorkspaceTabs } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon, type IconName } from '../ui/Icon'
+import { ModelPicker, useSelectableProviders, type ModelSelection } from '../ui/ModelPicker'
 import { Button } from '../ui/primitives'
 
 interface Draft {
   runId: string
   text: string
+  /** Streamed thinking, where the provider exposes it. Never part of `text`. */
+  reasoning: string
 }
 
 /**
@@ -20,7 +24,6 @@ interface Draft {
  * whole, so the first token appears as soon as the provider emits it.
  */
 export function ChatPanel(): JSX.Element {
-  const providers = useAppStore((store) => store.state.providers)
   const tabs = useWorkspaceTabs()
   const activeTab = useActiveTab()
   const { spring, tween } = useMotionTokens()
@@ -29,36 +32,27 @@ export function ChatPanel(): JSX.Element {
   const [input, setInput] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notices, setNotices] = useState<string[]>([])
   const [providerId, setProviderId] = useState<string>('')
   const [modelId, setModelId] = useState<string>('')
   const logRef = useRef<HTMLDivElement>(null)
 
-  const usableProviders = useMemo(
-    () => providers.filter((provider) => provider.enabled && provider.models.length > 0),
-    [providers]
-  )
+  const usableProviders = useSelectableProviders()
   const provider = usableProviders.find((candidate) => candidate.id === providerId)
 
-  // Settle on a sensible default provider/model as soon as one is configured.
-  useEffect(() => {
-    if (!provider && usableProviders.length > 0) {
-      const preferred = usableProviders.find((candidate) => candidate.hasKey) ?? usableProviders[0]!
-      setProviderId(preferred.id)
-      setModelId(preferred.models[0]?.id ?? '')
-    }
-  }, [provider, usableProviders])
-
-  useEffect(() => {
-    if (provider && !provider.models.some((model) => model.id === modelId)) {
-      setModelId(provider.models[0]?.id ?? '')
-    }
-  }, [provider, modelId])
+  const select = useCallback((selection: ModelSelection) => {
+    setProviderId(selection.providerId)
+    setModelId(selection.modelId)
+  }, [])
 
   useEffect(() => {
     return bridge.on('ai:stream', (event) => {
       setDraft((current) => {
         if (!current || current.runId !== event.runId) return current
         if (event.type === 'delta') return { ...current, text: current.text + event.text }
+        if (event.type === 'reasoning') {
+          return { ...current, reasoning: current.reasoning + event.text }
+        }
         return current
       })
 
@@ -76,6 +70,11 @@ export function ChatPanel(): JSX.Element {
       } else if (event.type === 'error') {
         setError(event.message)
         setDraft(null)
+      } else if (event.type === 'notice') {
+        // A fallback provider took over, or the budget has something to say.
+        // Shown rather than swallowed: the user is owed the fact that the
+        // answer came from somewhere other than what the dropdown says.
+        setNotices((current) => [...current, event.message])
       }
     })
   }, [])
@@ -117,7 +116,8 @@ export function ChatPanel(): JSX.Element {
     setMessages(history)
     setInput('')
     setError(null)
-    setDraft({ runId, text: '' })
+    setNotices([])
+    setDraft({ runId, text: '', reasoning: '' })
 
     send('ai:send', {
       runId,
@@ -149,6 +149,11 @@ export function ChatPanel(): JSX.Element {
       return
     }
 
+    // A workspace action is about everything open, not the page in front of you,
+    // so it pulls in every tab in the workspace rather than just the active one.
+    const extraTabIds =
+      action.needs === 'workspace' ? tabs.map((tab) => tab.id) : [activeTab.id]
+
     dispatch(
       action.prompt({
         title: context.title || activeTab.title,
@@ -156,7 +161,7 @@ export function ChatPanel(): JSX.Element {
         selection: context.selection
       }),
       action.id,
-      [activeTab.id]
+      extraTabIds
     )
   }
 
@@ -164,7 +169,8 @@ export function ChatPanel(): JSX.Element {
     return (
       <div className="rx-chat">
         <div className="rx-faint">
-          No provider has any models yet. Open Settings, add an API key, and run Discover models.
+          Every provider is listed in Settings — paste a key into any one of them and it becomes
+          available here.
         </div>
       </div>
     )
@@ -172,26 +178,8 @@ export function ChatPanel(): JSX.Element {
 
   return (
     <div className="rx-chat">
-      <div className="rx-row" style={{ flex: 'none' }}>
-        <select
-          className="rx-input"
-          value={providerId}
-          onChange={(event) => setProviderId(event.target.value)}
-        >
-          {usableProviders.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.label}
-              {candidate.hasKey ? '' : ' (no key)'}
-            </option>
-          ))}
-        </select>
-        <select className="rx-input" value={modelId} onChange={(event) => setModelId(event.target.value)}>
-          {(provider?.models ?? []).map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.label}
-            </option>
-          ))}
-        </select>
+      <div style={{ flex: 'none' }}>
+        <ModelPicker providerId={providerId} modelId={modelId} onChange={select} />
       </div>
 
       <div className="rx-row" style={{ flex: 'none', flexWrap: 'wrap', gap: 4 }}>
@@ -203,7 +191,8 @@ export function ChatPanel(): JSX.Element {
             title={tab.url}
             onClick={() => send('tabs:setAiContext', { tabId: tab.id, inContext: !tab.inAiContext })}
           >
-            {tab.inAiContext ? '✦' : '＋'} {tab.title || displayHost(tab.url) || 'New tab'}
+            <Icon name={tab.inAiContext ? 'sparkle' : 'plus'} size={11} />
+            {tab.title || displayHost(tab.url) || 'New tab'}
           </span>
         ))}
       </div>
@@ -218,7 +207,7 @@ export function ChatPanel(): JSX.Element {
             disabled={!activeTab || Boolean(draft)}
             onClick={() => void runQuickAction(action)}
           >
-            <span aria-hidden>{action.icon}</span>
+            <Icon name={action.icon as IconName} size={14} />
             {action.label}
           </button>
         ))}
@@ -254,12 +243,27 @@ export function ChatPanel(): JSX.Element {
             transition={tween('fast')}
           >
             <span className="rx-message-role">assistant</span>
+            {draft.reasoning ? (
+              <details className="rx-reasoning">
+                <summary>
+                  <Icon name="sparkle" size={12} />
+                  {draft.text ? 'Thought before answering' : 'Thinking…'}
+                </summary>
+                <div className="rx-message-body">{draft.reasoning}</div>
+              </details>
+            ) : null}
             <div className="rx-message-body">
               {draft.text}
               <span className="rx-caret" />
             </div>
           </motion.div>
         ) : null}
+
+        {notices.map((notice, index) => (
+          <div key={`${index}-${notice}`} className="rx-notice">
+            {notice}
+          </div>
+        ))}
 
         {error ? <div className="rx-danger">{error}</div> : null}
       </div>

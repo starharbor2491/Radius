@@ -8,10 +8,11 @@ import {
   parseAgentAction,
   type AgentStep
 } from '@shared/agent'
-import { useActiveTab, useAppStore } from '../store/useAppStore'
+import { useActiveTab } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
 import { useTheme } from '../theme/ThemeProvider'
+import { ModelPicker, useSelectableProviders, type ModelSelection } from '../ui/ModelPicker'
 import { Button } from '../ui/primitives'
 
 type RunState = 'idle' | 'thinking' | 'acting' | 'stopped' | 'finished' | 'error'
@@ -28,7 +29,6 @@ type RunState = 'idle' | 'thinking' | 'acting' | 'stopped' | 'finished' | 'error
  * cancels mid-action, and a cursor the user can see the whole time.
  */
 export function AgentPanel(): JSX.Element {
-  const providers = useAppStore((store) => store.state.providers)
   const activeTab = useActiveTab()
   const { theme } = useTheme()
   const { spring, tween, stagger } = useMotionTokens()
@@ -43,19 +43,13 @@ export function AgentPanel(): JSX.Element {
   const stopRef = useRef(false)
   const logRef = useRef<HTMLDivElement>(null)
 
-  const usableProviders = useMemo(
-    () => providers.filter((provider) => provider.enabled && provider.models.length > 0),
-    [providers]
-  )
+  const usableProviders = useSelectableProviders()
   const provider = usableProviders.find((candidate) => candidate.id === providerId)
 
-  useEffect(() => {
-    if (!provider && usableProviders.length > 0) {
-      const preferred = usableProviders.find((candidate) => candidate.hasKey) ?? usableProviders[0]!
-      setProviderId(preferred.id)
-      setModelId(preferred.models[0]?.id ?? '')
-    }
-  }, [provider, usableProviders])
+  const select = useCallback((selection: ModelSelection) => {
+    setProviderId(selection.providerId)
+    setModelId(selection.modelId)
+  }, [])
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
@@ -83,6 +77,11 @@ export function AgentPanel(): JSX.Element {
         const off = bridge.on('ai:stream', (event) => {
           if (event.runId !== runId) return
           if (event.type === 'delta') text += event.text
+          // Neither a notice (a fallback provider taking over, a budget warning)
+          // nor streamed reasoning is the answer or a failure; the loop keeps
+          // waiting for one. Reasoning in particular must stay out of `text`, or
+          // the model's thinking would be parsed as its chosen action.
+          else if (event.type === 'notice' || event.type === 'reasoning') return
           else if (event.type === 'done') {
             off()
             resolve(text)
@@ -202,7 +201,7 @@ export function AgentPanel(): JSX.Element {
     return (
       <div className="rx-chat">
         <div className="rx-faint">
-          The agent needs a model. Open Settings, add a provider, and press Discover models.
+          The agent needs a model. Every provider is listed in Settings — paste a key into one.
         </div>
       </div>
     )
@@ -210,31 +209,8 @@ export function AgentPanel(): JSX.Element {
 
   return (
     <div className="rx-chat">
-      <div className="rx-row" style={{ flex: 'none' }}>
-        <select
-          className="rx-input"
-          value={providerId}
-          disabled={busy}
-          onChange={(event) => setProviderId(event.target.value)}
-        >
-          {usableProviders.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rx-input"
-          value={modelId}
-          disabled={busy}
-          onChange={(event) => setModelId(event.target.value)}
-        >
-          {(provider?.models ?? []).map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.label}
-            </option>
-          ))}
-        </select>
+      <div style={{ flex: 'none' }}>
+        <ModelPicker providerId={providerId} modelId={modelId} onChange={select} disabled={busy} />
       </div>
 
       <div className="rx-agent-banner">

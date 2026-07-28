@@ -4,6 +4,7 @@ import { displayHost } from '@shared/url'
 import { useActiveTab, useAppStore } from '../store/useAppStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 
 /**
  * Bookmarks live in the sidebar under the tab strip rather than in a separate
@@ -82,7 +83,7 @@ export function BookmarksPanel({ open }: { open: boolean }): JSX.Element {
                       send('bookmarks:delete', { bookmarkId: bookmark.id })
                     }}
                   >
-                    ✕
+                    <Icon name="close" size={12} />
                   </button>
                 </motion.div>
               ))}

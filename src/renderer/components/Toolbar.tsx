@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useActiveTab, useAppStore } from '../store/useAppStore'
 import { useUiStore } from '../store/useUiStore'
 import { send } from '../lib/bridge'
+import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/primitives'
 import { Omnibox } from './Omnibox'
 
@@ -24,7 +25,7 @@ export function Toolbar(): JSX.Element {
         active={sidebarOpen}
         onClick={toggleSidebar}
       >
-        ▤
+        <Icon name="sidebar" />
       </IconButton>
 
       <IconButton
@@ -33,7 +34,7 @@ export function Toolbar(): JSX.Element {
         disabled={!tab?.canGoBack}
         onClick={() => tab && send('tabs:goBack', { tabId: tab.id })}
       >
-        ‹
+        <Icon name="back" />
       </IconButton>
       <IconButton
         aria-label="Forward"
@@ -41,7 +42,7 @@ export function Toolbar(): JSX.Element {
         disabled={!tab?.canGoForward}
         onClick={() => tab && send('tabs:goForward', { tabId: tab.id })}
       >
-        ›
+        <Icon name="forward" />
       </IconButton>
       <IconButton
         aria-label={tab?.loading ? 'Stop' : 'Reload'}
@@ -52,7 +53,7 @@ export function Toolbar(): JSX.Element {
           else send('tabs:reload', { tabId: tab.id })
         }}
       >
-        {tab?.loading ? '✕' : '⟳'}
+        <Icon name={tab?.loading ? 'stop' : 'reload'} />
       </IconButton>
 
       <Omnibox />
@@ -74,7 +75,7 @@ export function Toolbar(): JSX.Element {
             })
         }}
       >
-        {bookmarked ? '★' : '☆'}
+        <Icon name={bookmarked ? 'star-filled' : 'star'} />
       </IconButton>
 
       <IconButton
@@ -84,7 +85,7 @@ export function Toolbar(): JSX.Element {
         disabled={!tab}
         onClick={() => setFindOpen(!findOpen)}
       >
-        ⌕
+        <Icon name="search" />
       </IconButton>
       <IconButton
         aria-label="History"
@@ -92,7 +93,7 @@ export function Toolbar(): JSX.Element {
         active={rightPanel === 'history'}
         onClick={() => toggleRightPanel('history')}
       >
-        ↺
+        <Icon name="history" />
       </IconButton>
       <IconButton
         aria-label="Downloads"
@@ -100,7 +101,7 @@ export function Toolbar(): JSX.Element {
         active={rightPanel === 'downloads'}
         onClick={() => toggleRightPanel('downloads')}
       >
-        {downloading ? '⇩' : '⤓'}
+        <Icon name={downloading ? 'arrow-down' : 'download'} />
       </IconButton>
 
       <IconButton
@@ -109,7 +110,7 @@ export function Toolbar(): JSX.Element {
         active={rightPanel === 'ai'}
         onClick={() => toggleRightPanel('ai')}
       >
-        ✦
+        <Icon name="sparkle" />
       </IconButton>
       <IconButton
         aria-label="Agent"
@@ -117,7 +118,7 @@ export function Toolbar(): JSX.Element {
         active={rightPanel === 'agent'}
         onClick={() => toggleRightPanel('agent')}
       >
-        ⇱
+        <Icon name="agent" />
       </IconButton>
       <IconButton
         aria-label="Theme studio"
@@ -125,7 +126,7 @@ export function Toolbar(): JSX.Element {
         active={rightPanel === 'theme'}
         onClick={() => toggleRightPanel('theme')}
       >
-        ◐
+        <Icon name="palette" />
       </IconButton>
       <IconButton
         aria-label="Settings"
@@ -133,7 +134,7 @@ export function Toolbar(): JSX.Element {
         active={rightPanel === 'settings'}
         onClick={() => toggleRightPanel('settings')}
       >
-        ⚙
+        <Icon name="settings" />
       </IconButton>
     </div>
   )

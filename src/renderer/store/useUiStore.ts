@@ -9,6 +9,7 @@ export type RightPanel =
   | 'theme'
   | 'history'
   | 'downloads'
+  | 'usage'
 
 interface UiStore {
   sidebarOpen: boolean

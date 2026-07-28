@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState, type JSX } from 'react'
+import { forwardRef, useCallback, useRef, useState, type JSX } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useActiveWorkspace, useAppStore } from '../store/useAppStore'
 import { useUiStore } from '../store/useUiStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Button, IconButton } from '../ui/primitives'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { TabStrip } from './TabStrip'
@@ -15,15 +16,19 @@ import { BookmarksPanel } from './BookmarksPanel'
  * The handle writes straight into the UI store; App turns the resulting width
  * into the chrome insets main uses to place the page view, so dragging this
  * edge really does resize the web page.
+ *
+ * The ref is forwarded to the real root element on purpose. App used to measure
+ * a `display: contents` wrapper, which generates no box at all: the rect came
+ * back as zeros, the left inset reached main as 0, and the page view was placed
+ * over the top of the sidebar.
  */
-export function Sidebar(): JSX.Element {
+export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwardedRef): JSX.Element {
   const workspace = useActiveWorkspace()
   const workspaceCount = useAppStore((store) => store.state.workspaces.length)
   const { sidebarOpen, sidebarWidth, setSidebarWidth, bookmarksOpen, toggleBookmarks } = useUiStore()
   const { spring } = useMotionTokens()
 
   const [dragging, setDragging] = useState(false)
-  const frameRef = useRef<HTMLDivElement>(null)
 
   const startResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -47,7 +52,12 @@ export function Sidebar(): JSX.Element {
   )
 
   return (
-    <div className="rx-glass rx-sidebar" data-surface="chrome" ref={frameRef} style={{ borderRadius: 0, borderLeft: 'none', borderTop: 'none', borderBottom: 'none' }}>
+    <div
+      className="rx-glass rx-sidebar"
+      data-surface="chrome"
+      ref={forwardedRef}
+      style={{ borderRadius: 0, borderLeft: 'none', borderTop: 'none', borderBottom: 'none' }}
+    >
       <div className="rx-rail">
         <div className="rx-rail-drag" />
         <WorkspaceSwitcher />
@@ -81,7 +91,7 @@ export function Sidebar(): JSX.Element {
                 title="New tab  ⌘T"
                 onClick={() => send('tabs:create', {})}
               >
-                +
+                <Icon name="plus" />
               </IconButton>
             </div>
 
@@ -90,14 +100,17 @@ export function Sidebar(): JSX.Element {
             <BookmarksPanel open={bookmarksOpen} />
 
             <div className="rx-row" style={{ flex: 'none', gap: 'var(--rx-space-1)' }}>
-              <Button onClick={toggleBookmarks}>{bookmarksOpen ? '▾' : '▸'} Bookmarks</Button>
+              <Button onClick={toggleBookmarks}>
+                <Icon name={bookmarksOpen ? 'chevron-down' : 'chevron-right'} size={14} />
+                Bookmarks
+              </Button>
               {workspaceCount > 1 && workspace ? (
                 <Button
                   variant="danger"
                   title="Delete this workspace"
                   onClick={() => send('workspaces:delete', { workspaceId: workspace.id })}
                 >
-                  ␡
+                  <Icon name="trash" />
                 </Button>
               ) : null}
             </div>
@@ -116,4 +129,4 @@ export function Sidebar(): JSX.Element {
       ) : null}
     </div>
   )
-}
+})

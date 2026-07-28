@@ -4,6 +4,7 @@ import type { DownloadItem } from '@shared/types'
 import { useAppStore } from '../store/useAppStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Button } from '../ui/primitives'
 
 export function DownloadsPanel(): JSX.Element {
@@ -56,19 +57,23 @@ export function DownloadsPanel(): JSX.Element {
             {item.state === 'completed' ? (
               <>
                 <Button variant="outline" onClick={() => send('downloads:open', { id: item.id })}>
+                  <Icon name="external" size={14} />
                   Open
                 </Button>
                 <Button variant="outline" onClick={() => send('downloads:reveal', { id: item.id })}>
+                  <Icon name="folder" size={14} />
                   Show in folder
                 </Button>
               </>
             ) : null}
             {item.state === 'progressing' || item.state === 'paused' ? (
               <Button variant="outline" onClick={() => send('downloads:cancel', { id: item.id })}>
+                <Icon name="stop-circle" size={14} />
                 Cancel
               </Button>
             ) : null}
             <Button variant="danger" onClick={() => send('downloads:remove', { id: item.id })}>
+              <Icon name="trash" size={14} />
               Remove
             </Button>
           </div>
@@ -76,6 +81,7 @@ export function DownloadsPanel(): JSX.Element {
       ))}
 
       <Button variant="outline" onClick={() => send('downloads:clearFinished', {})}>
+        <Icon name="check" size={14} />
         Clear finished
       </Button>
     </div>

@@ -127,13 +127,27 @@ provider `hasKey`. It can never read one. All provider HTTP happens in main.
 the cost meter shows nothing rather than a fabricated number. Model catalogues
 come from runtime discovery, not hardcoded lists that go stale.
 
+**A provider with no models is still a provider.** The corollary of the rule
+above bit once already: because only Anthropic ships a default model list, a
+picker that filtered on `models.length > 0` showed a thirty-provider browser
+offering one. `ModelPicker` degrades to a typed model id plus a Discover button
+instead of hiding anything, and `setKey` starts discovery itself. Filter the
+pickers on `hasKey || models.length > 0`, never on models alone.
+
 ## Adding things
 
 **A provider:** if it speaks the OpenAI chat-completions shape, add an entry to
-`src/shared/provider-catalog.ts` — that is the whole change. Only write an
-adapter in `src/main/ai/adapters/` when the API shape is genuinely different
-(as Anthropic's and Google's are). If it needs request signing or OAuth, mark it
-`blocked` with a reason rather than half-supporting it.
+`src/shared/provider-catalog.ts` — that is the whole change. It gets seeded at
+first launch automatically, because `seedBuiltIns` walks
+`seedableCatalogEntries()`. Only write an adapter in `src/main/ai/adapters/`
+when the API shape is genuinely different (as Anthropic's and Google's are). If
+it needs request signing or OAuth, mark it `blocked` with a reason rather than
+half-supporting it.
+
+**An icon:** add it to the map in `src/renderer/ui/Icon.tsx` — 24×24,
+`strokeWidth 1.5`, `currentColor`, no fills. `IconName` is derived from the map,
+so a typo fails the build. Never put a glyph in JSX: font coverage varies and
+`✕` and `⟳` from different fallback fonts do not look like one family.
 
 **An agent capability:** extend `AgentActionSchema` in `src/shared/agent.ts`,
 handle it in `AgentController.perform`, and document it in

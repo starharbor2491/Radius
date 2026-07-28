@@ -333,7 +333,23 @@ export function registerIpcHandlers(services: AppServices): void {
       providers.cancel(runId)
       return OK
     },
-    'ai:usage': ({ sinceMs }) => state.listUsage(sinceMs)
+    'ai:usage': ({ sinceMs }) => state.listUsage(sinceMs),
+
+    /* ------------------------------------------------ routing & budget */
+    'ai:getRouting': () => providers.routing(),
+    'ai:setRouting': ({ config }) => {
+      providers.setRouting(config)
+      // Both documents live in settings, so the snapshot carries them to every
+      // panel that renders them -- no second subscription.
+      state.notify()
+      return OK
+    },
+    'ai:getBudget': () => providers.budget(),
+    'ai:setBudget': ({ config }) => {
+      providers.setBudget(config)
+      state.notify()
+      return OK
+    }
   }
 
   for (const channel of IPC_CHANNELS) {

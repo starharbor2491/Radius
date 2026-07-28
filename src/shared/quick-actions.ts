@@ -13,6 +13,13 @@ export interface QuickAction {
   label: string
   /** Short description shown in the palette and on hover. */
   hint: string
+  /**
+   * Name of an icon in the renderer's set, not a glyph.
+   *
+   * Typed as a string because this module is shared with main, which has no
+   * business importing a React component. A test asserts every name here
+   * resolves, so a typo still fails the build rather than rendering nothing.
+   */
   icon: string
   /**
    * What the action needs in order to be useful.
@@ -30,7 +37,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'summarize',
     label: 'Summarize page',
     hint: 'Key points from this page',
-    icon: '≡',
+    icon: 'list',
     needs: 'page',
     prompt: ({ title }) =>
       `Summarize the page "${title}" in at most six bullet points. ` +
@@ -41,7 +48,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'keypoints',
     label: 'Extract key facts',
     hint: 'Names, numbers, dates worth keeping',
-    icon: '◆',
+    icon: 'tag',
     needs: 'page',
     prompt: () =>
       `List the concrete facts on this page worth remembering -- names, figures, dates, ` +
@@ -51,7 +58,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'explain',
     label: 'Explain selection',
     hint: 'Plain-language explanation of the selected text',
-    icon: '?',
+    icon: 'question',
     needs: 'selection',
     prompt: ({ selection }) =>
       `Explain this in plain language, assuming no background knowledge:\n\n${selection}`
@@ -60,7 +67,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'translate',
     label: 'Translate to English',
     hint: 'Translate the selection, or the page',
-    icon: '⇄',
+    icon: 'translate',
     needs: 'page',
     prompt: ({ selection }) =>
       selection
@@ -71,7 +78,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'simplify',
     label: 'Simplify',
     hint: 'Rewrite the selection more simply',
-    icon: '◔',
+    icon: 'wand',
     needs: 'selection',
     prompt: ({ selection }) =>
       `Rewrite this to be as clear and short as possible without losing meaning. ` +
@@ -81,7 +88,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'critique',
     label: 'What is missing?',
     hint: 'Gaps, caveats and unstated assumptions',
-    icon: '◑',
+    icon: 'balance',
     needs: 'page',
     prompt: ({ title }) =>
       `Reading "${title}": what important context, caveats or counterpoints does this page ` +
@@ -93,7 +100,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'workspace-summary',
     label: 'Summarize all tabs',
     hint: 'What is open across this workspace',
-    icon: '≣',
+    icon: 'layers',
     needs: 'workspace',
     prompt: () =>
       `Below are all the pages currently open in this workspace. Give me a short summary of ` +
@@ -104,7 +111,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     id: 'workspace-question',
     label: 'Ask across tabs',
     hint: 'Answer using every open tab',
-    icon: '⌕',
+    icon: 'search',
     needs: 'workspace',
     prompt: () =>
       `Answer using the open pages below. Cite which page each part of the answer came from by ` +

@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '../store/useAppStore'
 import { bridge } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Button } from '../ui/primitives'
 
 /**
@@ -84,8 +85,14 @@ export function ProviderDirectory(): JSX.Element {
                 data-blocked={entry.kind === 'blocked' ? 'true' : 'false'}
                 onClick={() => setOpenId(openId === entry.id ? null : entry.id)}
               >
+                <Icon name={openId === entry.id ? 'chevron-down' : 'chevron-right'} size={14} />
                 <span className="rx-tab-title">{entry.label}</span>
-                {isConfigured(entry) ? <span className="rx-success">added</span> : null}
+                {isConfigured(entry) ? (
+                  <span className="rx-success rx-inline">
+                    <Icon name="check" size={13} />
+                    added
+                  </span>
+                ) : null}
                 {!entry.requiresKey ? <span className="rx-faint">no key</span> : null}
                 {entry.kind === 'blocked' ? <span className="rx-faint">unavailable</span> : null}
               </button>
@@ -112,6 +119,7 @@ export function ProviderDirectory(): JSX.Element {
 }
 
 function EntryForm({ entry, onDone }: { entry: CatalogEntry; onDone: () => void }): JSX.Element {
+  const providers = useAppStore((store) => store.state.providers)
   const [values, setValues] = useState<Record<string, string>>({})
   const [apiKey, setApiKey] = useState('')
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null)
@@ -137,15 +145,19 @@ function EntryForm({ entry, onDone }: { entry: CatalogEntry; onDone: () => void 
     setBusy(true)
     setStatus(null)
     try {
-      // Native providers already exist; this only needs to attach the key.
+      // Most catalogue entries are seeded at first launch, so the common case is
+      // attaching a key to a row that already exists. Only a templated endpoint
+      // -- or one the user removed and is now re-adding -- creates a new row.
+      const seeded = providers.find((provider) => provider.id === entry.id)
       const providerId =
-        entry.kind === 'native'
-          ? entry.id
-          : (await bridge.invoke('ai:addOpenAiCompatible', {
-              label: entry.label,
-              baseUrl: baseUrl!,
-              models: []
-            })).id
+        seeded?.id ??
+        (
+          await bridge.invoke('ai:addOpenAiCompatible', {
+            label: entry.label,
+            baseUrl: baseUrl!,
+            models: []
+          })
+        ).id
 
       if (apiKey.trim()) {
         await bridge.invoke('ai:setKey', { providerId, key: apiKey.trim() })
@@ -188,7 +200,10 @@ function EntryForm({ entry, onDone }: { entry: CatalogEntry; onDone: () => void 
 
       {entry.requiresKey ? (
         <label className="rx-field">
-          <span className="rx-label">API key</span>
+          <span className="rx-label rx-inline">
+            <Icon name="key" size={13} />
+            API key
+          </span>
           <input
             className="rx-input"
             type="password"
@@ -211,6 +226,7 @@ function EntryForm({ entry, onDone }: { entry: CatalogEntry; onDone: () => void 
             variant="outline"
             onClick={() => void bridge.invoke('tabs:create', { url: entry.apiKeyUrl! })}
           >
+            <Icon name="external" size={14} />
             Get a key
           </Button>
         ) : null}

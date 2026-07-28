@@ -320,6 +320,22 @@ function glassVars(name: string, surface: GlassTokens[GlassSurfaceName]): Record
   }
 }
 
+/**
+ * The caret a `<select>` paints for itself.
+ *
+ * A native select draws its arrow in the OS palette, which looks pasted on
+ * inside the chrome. The stylesheet replaces it with this background image --
+ * and because a background SVG cannot read `currentColor`, the colour has to be
+ * baked in here, where it stays a function of the theme rather than a literal
+ * in the stylesheet.
+ */
+function selectChevron(color: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+}
+
 function springVars(name: string, spring: SpringToken, scale: number): Record<string, string> {
   return {
     [`--rx-spring-${name}-stiffness`]: String(spring.stiffness),
@@ -356,6 +372,9 @@ export function resolveThemeVars(theme: Theme): Record<string, string> {
   for (const name of TAB_GROUP_COLORS) {
     vars[`--rx-color-group-${name}`] = colors.group[name]
   }
+  // Derived, not authored: the select caret has to carry its colour inside the
+  // image, so it is regenerated whenever the muted text token changes.
+  vars['--rx-select-chevron'] = selectChevron(colors.textMuted)
 
   for (const [level, shadow] of Object.entries(elevation)) {
     vars[`--rx-elevation-${level.replace('level', '')}`] = shadow

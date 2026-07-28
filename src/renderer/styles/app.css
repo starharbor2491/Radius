@@ -272,16 +272,49 @@ textarea {
   background: transparent;
   color: var(--rx-color-text-muted);
   cursor: pointer;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    color var(--rx-duration-fast) var(--rx-ease-standard),
+    box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
 }
 
-.rx-icon-button:hover {
+.rx-icon-button:hover:not(:disabled) {
   background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-icon-button:active:not(:disabled) {
+  background: var(--rx-color-surface-3);
   color: var(--rx-color-text);
 }
 
 .rx-icon-button[data-active='true'] {
   background: var(--rx-color-surface-3);
   color: var(--rx-color-accent);
+  box-shadow: inset 0 0 0 var(--rx-border-width)
+    color-mix(in oklch, var(--rx-color-accent) 34%, transparent);
+}
+
+.rx-icon-button[data-active='true']:hover:not(:disabled) {
+  color: var(--rx-color-accent);
+}
+
+.rx-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+}
+
+/*
+ * Icons.
+ *
+ * Every glyph in the chrome is an inline SVG from `ui/Icon.tsx` rather than a
+ * text character: a font glyph arrives at whatever weight, size and baseline
+ * the platform happens to have, and falls back to tofu when it is missing.
+ */
+.rx-icon {
+  display: block;
+  flex: none;
 }
 
 .rx-input {
@@ -321,6 +354,115 @@ textarea {
   font-size: var(--rx-text-n1);
   color: var(--rx-color-text-muted);
   margin-bottom: var(--rx-space-1);
+}
+
+/* Icon-plus-text on one baseline, wherever a label or badge needs it. */
+.rx-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+}
+
+/*
+ * Selects.
+ *
+ * The native control paints its own arrow in the OS palette, which reads as a
+ * foreign object inside glass. Dropping `appearance` hands the whole box to the
+ * tokens; the caret comes back as `--rx-select-chevron`, an SVG the token engine
+ * paints in the theme's muted text colour so it retints with everything else.
+ */
+select.rx-input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: var(--rx-space-7);
+  background-image: var(--rx-select-chevron);
+  background-repeat: no-repeat;
+  background-position: right var(--rx-space-2) center;
+  background-size: var(--rx-space-4) var(--rx-space-4);
+  cursor: pointer;
+  transition:
+    border-color var(--rx-duration-fast) var(--rx-ease-standard),
+    background-color var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+select.rx-input:hover {
+  border-color: var(--rx-color-border-strong);
+  background-color: var(--rx-color-surface-2);
+}
+
+/* The popup is an OS window, so this is all the theming it will accept. */
+select.rx-input option {
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text);
+}
+
+/* Spinners are unusable at this size and the arrows fight the glass. */
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+/*
+ * Checkboxes.
+ *
+ * `accent-color` alone still leaves the OS box shape and its own corner radius,
+ * so the box is rebuilt from tokens and the tick is drawn with two borders --
+ * cheaper than an image and it inherits the accent-text colour.
+ */
+input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: none;
+  width: var(--rx-space-4);
+  height: var(--rx-space-4);
+  margin: 0;
+  border: var(--rx-border-width) solid var(--rx-color-border-strong);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-1);
+  accent-color: var(--rx-color-accent);
+  cursor: pointer;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    border-color var(--rx-duration-fast) var(--rx-ease-standard),
+    box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+input[type='checkbox']::before {
+  content: '';
+  width: var(--rx-space-1);
+  height: calc(var(--rx-space-2) * 0.9);
+  border: solid var(--rx-color-accent-text);
+  border-width: 0 calc(var(--rx-border-width) * 2) calc(var(--rx-border-width) * 2) 0;
+  transform: translateY(calc(var(--rx-border-width) * -1)) rotate(45deg);
+  opacity: 0;
+  transition: opacity var(--rx-duration-instant) var(--rx-ease-standard);
+}
+
+input[type='checkbox']:hover {
+  border-color: var(--rx-color-accent);
+}
+
+input[type='checkbox']:checked {
+  background: var(--rx-color-accent);
+  border-color: var(--rx-color-accent);
+}
+
+input[type='checkbox']:checked::before {
+  opacity: 1;
+}
+
+input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--rx-space-1) color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
 }
 
 .rx-section-title {
@@ -460,7 +602,8 @@ textarea {
 
 .rx-tab-pin {
   flex: none;
-  font-size: 9px;
+  display: grid;
+  place-items: center;
   color: var(--rx-color-accent);
 }
 
@@ -491,7 +634,9 @@ textarea {
 }
 
 .rx-group-caret {
-  display: inline-block;
+  display: grid;
+  place-items: center;
+  flex: none;
   transition: transform var(--rx-duration-fast) var(--rx-ease-standard);
 }
 
@@ -666,6 +811,55 @@ textarea {
   color: var(--rx-color-success);
 }
 
+/* A run said something that is neither the answer nor a failure: a fallback
+ * provider took over, or the budget spoke up. */
+.rx-notice {
+  color: var(--rx-color-warning);
+  font-size: var(--rx-text-n1);
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-2);
+}
+
+/* ------------------------------------------------------------------ *
+ * Spend meter
+ * ------------------------------------------------------------------ */
+
+.rx-meter {
+  height: var(--rx-space-2);
+  width: 100%;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-3);
+  overflow: hidden;
+}
+
+.rx-meter-fill {
+  height: 100%;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
+}
+
+.rx-meter[data-status='warn'] .rx-meter-fill {
+  background: var(--rx-color-warning);
+}
+
+.rx-meter[data-status='over'] .rx-meter-fill {
+  background: var(--rx-color-danger);
+}
+
+.rx-usage-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--rx-space-1) var(--rx-space-2);
+  padding: var(--rx-space-2);
+  border-bottom: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+.rx-usage-row:last-child {
+  border-bottom: none;
+}
+
 .rx-card {
   padding: var(--rx-space-3);
   border: var(--rx-border-width) solid var(--rx-color-border);
@@ -676,9 +870,79 @@ textarea {
   gap: var(--rx-space-2);
 }
 
+/*
+ * Sliders.
+ *
+ * `accent-color` gets the colour right and nothing else: the track keeps the
+ * platform's height, the thumb keeps its shadow, and neither responds to the
+ * geometry tokens. Both parts are rebuilt here.
+ *
+ * The filled portion is a hard-stopped gradient on the track rather than a
+ * second element, because a range input has no room for one. `--rx-slider-fill`
+ * is written by the Slider component as a percentage -- the value is data, not
+ * a design decision, which is why it is not a theme token.
+ */
 .rx-slider {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
+  height: var(--rx-space-5);
+  margin: 0;
+  padding: 0;
+  background: transparent;
   accent-color: var(--rx-color-accent);
+  cursor: pointer;
+}
+
+.rx-slider::-webkit-slider-runnable-track {
+  height: var(--rx-space-1);
+  border-radius: var(--rx-radius-pill);
+  background:
+    linear-gradient(
+        to right,
+        var(--rx-color-accent) 0 var(--rx-slider-fill, 0%),
+        transparent var(--rx-slider-fill, 0%) 100%
+      ),
+    var(--rx-color-surface-3);
+}
+
+.rx-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--rx-space-4);
+  height: var(--rx-space-4);
+  /* Centre the thumb on a track that is thinner than it is. */
+  margin-top: calc((var(--rx-space-1) - var(--rx-space-4)) / 2);
+  border: none;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
+  box-shadow:
+    var(--rx-elevation-1),
+    0 0 0 0 color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
+  transition: box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-slider:hover::-webkit-slider-thumb {
+  box-shadow:
+    var(--rx-elevation-1),
+    0 0 0 var(--rx-space-1) color-mix(in oklch, var(--rx-color-accent) 26%, transparent);
+}
+
+.rx-slider:active::-webkit-slider-thumb,
+.rx-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    var(--rx-elevation-2),
+    0 0 0 calc(var(--rx-space-1) * 1.5) color-mix(in oklch, var(--rx-color-accent) 34%, transparent);
+}
+
+/* The ring above is the focus affordance; the default outline would clip. */
+.rx-slider:focus-visible {
+  outline: none;
+}
+
+.rx-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .rx-swatch-grid {
@@ -727,6 +991,18 @@ textarea {
   flex: 1;
   min-height: 0;
   gap: var(--rx-space-2);
+}
+
+/* Provider + model selection. Grows a row when a provider has no model list
+   yet and the picker has to offer discovery or a typed model id. */
+.rx-model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+}
+
+.rx-model-picker > .rx-row > .rx-input {
+  min-width: 0;
 }
 
 .rx-chat-log {
@@ -784,6 +1060,35 @@ textarea {
   100% {
     opacity: 0;
   }
+}
+
+/* A reasoning model's visible thinking. Collapsed by default: it is context for
+   the answer, not the answer, and expanding it should be a choice. */
+.rx-reasoning {
+  border-left: var(--rx-border-width) solid var(--rx-color-border-strong);
+  padding-left: var(--rx-space-2);
+  margin-bottom: var(--rx-space-2);
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n2);
+}
+
+.rx-reasoning > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.rx-reasoning > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rx-reasoning > .rx-message-body {
+  margin-top: var(--rx-space-1);
+  white-space: pre-wrap;
+  color: var(--rx-color-text-faint);
 }
 
 .rx-context-chip {

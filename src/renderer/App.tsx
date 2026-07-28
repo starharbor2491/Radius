@@ -13,8 +13,10 @@ import { ChatPanel } from './panels/ChatPanel'
 import { AgentPanel } from './panels/AgentPanel'
 import { HistoryPanel } from './panels/HistoryPanel'
 import { DownloadsPanel } from './panels/DownloadsPanel'
+import { UsagePanel } from './panels/UsagePanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { ThemeStudio } from './panels/ThemeStudio'
+import { Icon } from './ui/Icon'
 import { IconButton, Toast } from './ui/primitives'
 
 const PANEL_TITLES: Record<string, string> = {
@@ -23,7 +25,8 @@ const PANEL_TITLES: Record<string, string> = {
   settings: 'Settings',
   theme: 'Theme studio',
   history: 'History',
-  downloads: 'Downloads'
+  downloads: 'Downloads',
+  usage: 'AI usage and budget'
 }
 
 export function App(): JSX.Element {
@@ -102,9 +105,7 @@ export function App(): JSX.Element {
 
   return (
     <div className="rx-shell">
-      <div ref={sidebarRef} style={{ display: 'contents' }}>
-        <Sidebar />
-      </div>
+      <Sidebar ref={sidebarRef} />
 
       <div className="rx-main">
         <div ref={toolbarRef}>
@@ -138,7 +139,7 @@ export function App(): JSX.Element {
               <div className="rx-panel-header">
                 <span className="rx-panel-title">{PANEL_TITLES[rightPanel] ?? ''}</span>
                 <IconButton aria-label="Close panel" onClick={() => setRightPanel('none')}>
-                  ✕
+                  <Icon name="close" size={13} />
                 </IconButton>
               </div>
 
@@ -148,6 +149,7 @@ export function App(): JSX.Element {
               {rightPanel === 'theme' ? <ThemeStudio /> : null}
               {rightPanel === 'history' ? <HistoryPanel /> : null}
               {rightPanel === 'downloads' ? <DownloadsPanel /> : null}
+              {rightPanel === 'usage' ? <UsagePanel /> : null}
             </div>
           </motion.div>
         ) : null}

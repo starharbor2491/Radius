@@ -263,7 +263,21 @@ export type TokenUsage = z.infer<typeof TokenUsageSchema>
 export const AiStreamEventSchema = z.discriminatedUnion('type', [
   z.object({ runId: z.string(), type: z.literal('delta'), text: z.string() }),
   z.object({ runId: z.string(), type: z.literal('done'), usage: TokenUsageSchema.nullable() }),
-  z.object({ runId: z.string(), type: z.literal('error'), message: z.string() })
+  z.object({ runId: z.string(), type: z.literal('error'), message: z.string() }),
+  /**
+   * Something the user should know that is not the answer and not a failure --
+   * a fallback provider taking over, or a budget warning. Non-terminal: a run
+   * that emits a notice still ends with exactly one `done` or `error`.
+   */
+  z.object({ runId: z.string(), type: z.literal('notice'), message: z.string() }),
+  /**
+   * A reasoning-model's visible thinking, where the provider streams it.
+   *
+   * Kept a separate event rather than folded into `delta` because it is not the
+   * answer: it must not be shown as the reply, must not be fed back as assistant
+   * turn content, and the agent loop has to ignore it when parsing an action.
+   */
+  z.object({ runId: z.string(), type: z.literal('reasoning'), text: z.string() })
 ])
 export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>
 

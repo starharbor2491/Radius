@@ -4,6 +4,7 @@ import { useActiveTab } from '../store/useAppStore'
 import { useUiStore } from '../store/useUiStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/primitives'
 
 /**
@@ -105,16 +106,16 @@ export function FindBar(): JSX.Element {
             active={matchCase}
             onClick={() => setMatchCase((current) => !current)}
           >
-            Aa
+            <Icon name="match-case" />
           </IconButton>
           <IconButton aria-label="Previous match" title="Previous  ⇧⏎" onClick={() => step(false)}>
-            ↑
+            <Icon name="arrow-up" />
           </IconButton>
           <IconButton aria-label="Next match" title="Next  ⏎" onClick={() => step(true)}>
-            ↓
+            <Icon name="arrow-down" />
           </IconButton>
           <IconButton aria-label="Close find" title="Close  Esc" onClick={close}>
-            ✕
+            <Icon name="close" />
           </IconButton>
         </motion.div>
       ) : null}
