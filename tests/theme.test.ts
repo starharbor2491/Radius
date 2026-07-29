@@ -61,7 +61,9 @@ describe('resolveThemeVars', () => {
       '--rx-text-0',
       '--rx-duration-fast',
       '--rx-spring-tabDrag-stiffness',
-      '--rx-color-group-violet'
+      '--rx-color-group-violet',
+      '--rx-color-scrim',
+      '--rx-opacity-disabled'
     ]) {
       expect(vars[name], name).toBeDefined()
     }
@@ -92,6 +94,13 @@ describe('resolveThemeVars', () => {
     expect(Number.parseInt(slow['--rx-duration-fast']!, 10)).toBe(
       Number.parseInt(base['--rx-duration-fast']!, 10) * 2
     )
+  })
+
+  it('lets a light theme dim with its own scrim rather than black', () => {
+    // 28% black is a whisper over a dark window and a bruise over a light one.
+    const light = getPreset('daylight')!
+    expect(light.colors.scrim).not.toBe(parseTheme({}).colors.scrim)
+    expect(resolveThemeVars(light)['--rx-color-scrim']).toBe(light.colors.scrim)
   })
 
   it('scales spacing with density', () => {

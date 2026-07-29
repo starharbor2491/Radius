@@ -210,6 +210,53 @@ export function shortcutLabel(
 }
 
 /**
+ * A binding as an Electron accelerator, or `null` when it cannot be one.
+ *
+ * The native menu has to agree with the rest of the app: with a hardcoded
+ * accelerator, applying the Vim set left Cmd+T still opening a tab from the
+ * File menu, and remapping a command silently did nothing to its menu item.
+ *
+ * Chords return `null` rather than a lie. An Electron accelerator is a single
+ * combination and cannot express a sequence, so a command bound to `g t` gets a
+ * menu item with no accelerator -- the item still works, and the shortcut still
+ * works through the renderer's own matcher. Printing "G T" there would be a
+ * key combination the OS would refuse to register.
+ */
+export function electronAccelerator(binding: string): string | null {
+  if (isChord(binding)) return null
+  const parsed = parseBinding(binding)
+  if (!parsed) return null
+
+  const parts: string[] = []
+  if (parsed.mod) parts.push('CmdOrCtrl')
+  if (parsed.ctrl && !parsed.mod) parts.push('Control')
+  if (parsed.alt) parts.push('Alt')
+  if (parsed.shift) parts.push('Shift')
+
+  const key = ACCELERATOR_KEYS[parsed.key] ?? parsed.key
+  if (!key) return null
+  parts.push(key.length === 1 ? key.toUpperCase() : key)
+  return parts.join('+')
+}
+
+/** Key names Electron spells differently from a DOM `KeyboardEvent.key`. */
+const ACCELERATOR_KEYS: Record<string, string> = {
+  arrowup: 'Up',
+  arrowdown: 'Down',
+  arrowleft: 'Left',
+  arrowright: 'Right',
+  escape: 'Esc',
+  ' ': 'Space',
+  enter: 'Return',
+  backspace: 'Backspace',
+  delete: 'Delete',
+  tab: 'Tab',
+  '+': 'Plus',
+  '=': 'Plus',
+  '-': '-'
+}
+
+/**
  * Whether a platform string names a Mac.
  *
  * `navigator.platform` is deprecated but still the only thing every Electron

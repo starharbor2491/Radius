@@ -8,6 +8,7 @@ import {
   canonicalBinding,
   countOverrides,
   detectPreset,
+  electronAccelerator,
   findConflicts,
   formatBinding,
   isChord,
@@ -526,6 +527,44 @@ describe('the shipped defaults', () => {
   it('are all single accelerators, so nothing swallows a keystroke by default', () => {
     for (const [commandId, binding] of Object.entries(DEFAULT_KEYBINDINGS)) {
       expect(isChord(binding), commandId).toBe(false)
+    }
+  })
+})
+
+describe('electronAccelerator', () => {
+  it('converts a single combination into Electron syntax', () => {
+    expect(electronAccelerator('Mod+T')).toBe('CmdOrCtrl+T')
+    expect(electronAccelerator('Mod+Shift+T')).toBe('CmdOrCtrl+Shift+T')
+    expect(electronAccelerator('Mod+Alt+I')).toBe('CmdOrCtrl+Alt+I')
+  })
+
+  it('refuses a chord rather than inventing a combination for it', () => {
+    // An Electron accelerator is one combination. "G T" would be registered as
+    // a key the OS never produces, so the menu item gets no accelerator at all.
+    expect(electronAccelerator('g t')).toBeNull()
+    expect(electronAccelerator('Mod+K Mod+S')).toBeNull()
+  })
+
+  it('spells the keys Electron spells differently', () => {
+    expect(electronAccelerator('Mod+ArrowUp')).toBe('CmdOrCtrl+Up')
+    expect(electronAccelerator('Escape')).toBe('Esc')
+    expect(electronAccelerator('Mod+Enter')).toBe('CmdOrCtrl+Return')
+  })
+
+  it('returns null for anything unparseable, so no bad accelerator reaches Electron', () => {
+    expect(electronAccelerator('')).toBeNull()
+    expect(electronAccelerator('   ')).toBeNull()
+  })
+
+  it('produces a usable accelerator for every non-chord default binding', () => {
+    for (const [command, binding] of Object.entries(DEFAULT_KEYBINDINGS)) {
+      if (isChord(binding)) continue
+      const accelerator = electronAccelerator(binding)
+      expect(accelerator, `${command} -> ${binding}`).toBeTruthy()
+      // Electron rejects an accelerator with an empty or duplicated segment.
+      const parts = accelerator!.split('+')
+      expect(parts.every(Boolean), accelerator!).toBe(true)
+      expect(new Set(parts).size, accelerator!).toBe(parts.length)
     }
   })
 })

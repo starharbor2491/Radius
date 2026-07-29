@@ -10,7 +10,7 @@ import { formatOklch, parseOklch, toHex } from '@shared/color'
 import { useTheme, type ThemeScope } from '../theme/ThemeProvider'
 import { part, RADIUS_PARTS } from '../theme/parts'
 import { bridge } from '../lib/bridge'
-import { Button, Field, Slider } from '../ui/primitives'
+import { Button, Field } from '../ui/primitives'
 import { Icon } from '../ui/Icon'
 import { ThemeGallery } from './ThemeGallery'
 
@@ -160,7 +160,7 @@ export function ThemeStudio(): JSX.Element {
             </select>
           </Field>
 
-          <Slider
+          <Ramp
             label="Blur"
             suffix="px"
             min={0}
@@ -168,7 +168,7 @@ export function ThemeStudio(): JSX.Element {
             value={glass.blur}
             onChange={(blur) => update({ glass: { [surface]: { blur } } as never })}
           />
-          <Slider
+          <Ramp
             label="Saturation"
             min={0}
             max={4}
@@ -176,7 +176,7 @@ export function ThemeStudio(): JSX.Element {
             value={glass.saturation}
             onChange={(saturation) => update({ glass: { [surface]: { saturation } } as never })}
           />
-          <Slider
+          <Ramp
             label="Tint opacity"
             min={0}
             max={1}
@@ -184,7 +184,7 @@ export function ThemeStudio(): JSX.Element {
             value={glass.tintAlpha}
             onChange={(tintAlpha) => update({ glass: { [surface]: { tintAlpha } } as never })}
           />
-          <Slider
+          <Ramp
             label="Grain"
             min={0}
             max={0.3}
@@ -192,7 +192,7 @@ export function ThemeStudio(): JSX.Element {
             value={glass.noise}
             onChange={(noise) => update({ glass: { [surface]: { noise } } as never })}
           />
-          <Slider
+          <Ramp
             label="Edge light"
             min={0}
             max={1}
@@ -206,7 +206,7 @@ export function ThemeStudio(): JSX.Element {
       <section>
         <div className="rx-section-title">Shape</div>
         <div className="rx-card">
-          <Slider
+          <Ramp
             label="Corner radius"
             suffix="px"
             min={0}
@@ -221,7 +221,7 @@ export function ThemeStudio(): JSX.Element {
             resolved geometry and pushes the shape, so these two only have to
             write tokens like every other control.
           */}
-          <Slider
+          <Ramp
             label="Page inset"
             suffix="px"
             min={0}
@@ -229,7 +229,7 @@ export function ThemeStudio(): JSX.Element {
             value={theme.geometry.pageInset}
             onChange={(pageInset) => update({ geometry: { pageInset } })}
           />
-          <Slider
+          <Ramp
             label="Page corner radius"
             suffix="px"
             min={0}
@@ -252,7 +252,7 @@ export function ThemeStudio(): JSX.Element {
               <option value="comfortable">Comfortable</option>
             </select>
           </Field>
-          <Slider
+          <Ramp
             label="Base text size"
             suffix="px"
             min={10}
@@ -275,7 +275,7 @@ export function ThemeStudio(): JSX.Element {
               onChange={(event) => update({ motion: { enabled: event.target.checked } })}
             />
           </div>
-          <Slider
+          <Ramp
             label="Speed"
             suffix="×"
             min={0.3}
@@ -284,7 +284,7 @@ export function ThemeStudio(): JSX.Element {
             value={theme.motion.scale}
             onChange={(scale) => update({ motion: { scale } })}
           />
-          <Slider
+          <Ramp
             label="Tab drag stiffness"
             min={100}
             max={1200}
@@ -292,14 +292,14 @@ export function ThemeStudio(): JSX.Element {
             value={theme.motion.springs.tabDrag.stiffness}
             onChange={(stiffness) => update({ motion: { springs: { tabDrag: { stiffness } } } })}
           />
-          <Slider
+          <Ramp
             label="Tab drag damping"
             min={5}
             max={80}
             value={theme.motion.springs.tabDrag.damping}
             onChange={(damping) => update({ motion: { springs: { tabDrag: { damping } } } })}
           />
-          <Slider
+          <Ramp
             label="Stagger"
             suffix="s"
             min={0}
@@ -557,8 +557,14 @@ function ContrastNote({ finding }: { finding: ContrastFinding | undefined }): JS
 }
 
 /**
- * Editing OKLCH directly rather than through a hex picker: lightness and chroma
- * are separable here, so dragging one does not silently change the others.
+ * One colour token: a row you can read, and three sliders you can open.
+ *
+ * Five colours times a lightness, chroma and hue slider is fifteen identical
+ * full-width tracks -- a wall, and one that hides the thing you actually came to
+ * check, which is the swatch and whether it passes. So the row is the default
+ * and the ramps are a disclosure. Editing OKLCH rather than a hex picker is
+ * still the point: lightness and chroma are separable, so dragging one does not
+ * silently change the others.
  */
 function OklchControl({
   label,
@@ -571,58 +577,116 @@ function OklchControl({
   onChange: (value: string) => void
   findings?: Array<ContrastFinding | undefined>
 }): JSX.Element {
+  const [open, setOpen] = useState(false)
   const parsed = parseOklch(value)
+  const failing = findings.some((finding) => finding && !finding.passes)
   const notes = findings.map((finding) =>
     finding ? <ContrastNote key={finding.id} finding={finding} /> : null
   )
 
-  if (!parsed) {
-    return (
-      <div className="rx-field">
-        <Field label={label}>
+  return (
+    <div className="rx-color" data-open={open ? 'true' : 'false'} data-failing={failing ? 'true' : 'false'}>
+      <button
+        type="button"
+        className="rx-color-head"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="rx-swatch" style={{ background: value }} />
+        <span className="rx-color-name">{label}</span>
+        <code className="rx-color-value">{parsed ? toHex(parsed) : value}</code>
+        <Icon name={open ? 'minus' : 'plus'} size={12} />
+      </button>
+
+      {notes}
+
+      {open ? (
+        parsed ? (
+          <div className="rx-ramps">
+            <Ramp
+              label="Lightness"
+              min={0}
+              max={1}
+              step={0.01}
+              value={parsed.l}
+              onChange={(l) => onChange(formatOklch({ ...parsed, l }))}
+            />
+            <Ramp
+              label="Chroma"
+              min={0}
+              max={0.37}
+              step={0.005}
+              value={parsed.c}
+              onChange={(c) => onChange(formatOklch({ ...parsed, c }))}
+            />
+            <Ramp
+              label="Hue"
+              suffix="°"
+              min={0}
+              max={360}
+              value={parsed.h}
+              onChange={(h) => onChange(formatOklch({ ...parsed, h }))}
+            />
+          </div>
+        ) : (
+          // Not OKLCH -- legal CSS, so it stays applied and stays editable as
+          // text rather than being rewritten into something we can grade.
           <input
             className="rx-input"
             value={value}
+            aria-label={label}
             onChange={(event) => onChange(event.target.value)}
           />
-        </Field>
-        {notes}
-      </div>
-    )
-  }
-
-  return (
-    <div className="rx-field">
-      <div className="rx-row-between">
-        <span className="rx-label rx-label-inline">{label}</span>
-        <span className="rx-swatch" style={{ background: value }} title={toHex(parsed)} />
-      </div>
-      <Slider
-        label="Lightness"
-        min={0}
-        max={1}
-        step={0.01}
-        value={parsed.l}
-        onChange={(l) => onChange(formatOklch({ ...parsed, l }))}
-      />
-      <Slider
-        label="Chroma"
-        min={0}
-        max={0.37}
-        step={0.005}
-        value={parsed.c}
-        onChange={(c) => onChange(formatOklch({ ...parsed, c }))}
-      />
-      <Slider
-        label="Hue"
-        suffix="°"
-        min={0}
-        max={360}
-        value={parsed.h}
-        onChange={(h) => onChange(formatOklch({ ...parsed, h }))}
-      />
-      {notes}
+        )
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * A slider on one row: label, track, value.
+ *
+ * The shared `Slider` stacks its label above its track, which is right for a
+ * settings form and wrong for a column of a dozen tokens -- the studio is the
+ * one place where the labels outnumber the content.
+ */
+function Ramp({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  suffix = '',
+  onChange
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step?: number
+  suffix?: string
+  onChange: (value: number) => void
+}): JSX.Element {
+  const ratio = max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0
+  return (
+    <label className="rx-ramp">
+      <span className="rx-ramp-label">{label}</span>
+      <input
+        className="rx-slider"
+        data-radius-part="slider"
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        style={{ ['--rx-slider-fill' as string]: `${ratio}%` }}
+        onChange={(event) => onChange(Number.parseFloat(event.target.value))}
+      />
+      <span className="rx-ramp-value">
+        {Math.round(value * 100) / 100}
+        {suffix}
+      </span>
+    </label>
   )
 }
 

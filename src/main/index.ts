@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, Menu, session, shell, type MenuItemConstructorOptions } from 'electron'
+import { DEFAULT_KEYBINDINGS, electronAccelerator } from '@shared/keybindings'
 import { JsonStore, storePathFor } from './store/JsonStore'
 import { StateStore } from './state/StateStore'
 import { SecretStore } from './ai/SecretStore'
@@ -36,24 +37,37 @@ function hardenSession(): void {
   partition.setPermissionCheckHandler(() => false)
 }
 
-function buildMenu(send: (command: string) => void): void {
+/**
+ * The native menu, built from the live binding map.
+ *
+ * Accelerators used to be hardcoded here, which meant the menu quietly
+ * disagreed with the rest of the app: applying the Vim set left Cmd+T opening a
+ * tab from the File menu, and remapping a command did nothing to its menu item.
+ * `electronAccelerator` returns null for a chord -- an Electron accelerator is
+ * one combination and cannot express a sequence -- so those items keep working
+ * but print no shortcut rather than one the OS would refuse to register.
+ */
+function buildMenu(
+  bindings: Record<string, string>,
+  send: (command: string) => void
+): void {
   const isMac = process.platform === 'darwin'
-  const command = (label: string, accelerator: string, id: string): MenuItemConstructorOptions => ({
-    label,
-    accelerator,
-    click: () => send(id)
-  })
+  const command = (label: string, id: string): MenuItemConstructorOptions => {
+    const binding = bindings[id]
+    const accelerator = binding ? electronAccelerator(binding) : null
+    return { label, ...(accelerator ? { accelerator } : {}), click: () => send(id) }
+  }
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
     {
       label: 'File',
       submenu: [
-        command('New Tab', 'CmdOrCtrl+T', 'tab.new'),
-        command('Close Tab', 'CmdOrCtrl+W', 'tab.close'),
-        command('Reopen Closed Tab', 'CmdOrCtrl+Shift+T', 'tab.reopen'),
+        command('New Tab', 'tab.new'),
+        command('Close Tab', 'tab.close'),
+        command('Reopen Closed Tab', 'tab.reopen'),
         { type: 'separator' },
-        command('New Workspace', 'CmdOrCtrl+Shift+N', 'workspace.new'),
+        command('New Workspace', 'workspace.new'),
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
@@ -62,13 +76,13 @@ function buildMenu(send: (command: string) => void): void {
     {
       label: 'View',
       submenu: [
-        command('Focus Address Bar', 'CmdOrCtrl+L', 'omnibox.focus'),
-        command('Command Palette', 'CmdOrCtrl+K', 'palette.open'),
-        command('Toggle AI Panel', 'CmdOrCtrl+J', 'ai.toggle'),
-        command('Toggle Sidebar', 'CmdOrCtrl+B', 'sidebar.toggle'),
+        command('Focus Address Bar', 'omnibox.focus'),
+        command('Command Palette', 'palette.open'),
+        command('Toggle AI Panel', 'ai.toggle'),
+        command('Toggle Sidebar', 'sidebar.toggle'),
         { type: 'separator' },
-        command('Reload Page', 'CmdOrCtrl+R', 'tab.reload'),
-        command('Theme Studio', 'CmdOrCtrl+Shift+,', 'theme.open'),
+        command('Reload Page', 'tab.reload'),
+        command('Theme Studio', 'theme.open'),
         { type: 'separator' },
         { role: 'toggleDevTools' }
       ]
@@ -144,9 +158,30 @@ function bootstrap(): void {
     })
   })
 
-  buildMenu((commandId) => {
+  /*
+   * The menu is rebuilt whenever the bindings change, so remapping a command or
+   * applying a preset set updates its menu item too. Rebuilt only when the map
+   * actually differs -- `state.subscribe` fires on every mutation, and
+   * reconstructing the application menu on each tab title change would be
+   * visible on macOS.
+   */
+  const invoke = (commandId: string): void => {
     if (window.chromeView.webContents.isDestroyed()) return
     window.chromeView.webContents.send('command:invoke', { command: commandId })
+  }
+  const currentBindings = (): Record<string, string> => ({
+    ...DEFAULT_KEYBINDINGS,
+    ...state.getSetting<Record<string, string>>('keybindings', {})
+  })
+
+  let menuSignature = JSON.stringify(currentBindings())
+  buildMenu(currentBindings(), invoke)
+
+  state.subscribe(() => {
+    const signature = JSON.stringify(currentBindings())
+    if (signature === menuSignature) return
+    menuSignature = signature
+    buildMenu(currentBindings(), invoke)
   })
 
   // Restore only once the chrome can receive the snapshot it triggers.

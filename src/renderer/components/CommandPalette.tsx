@@ -76,8 +76,7 @@ export function CommandPalette({ commands }: { commands: Command[] }): JSX.Eleme
     const order: string[] = []
     const byGroup = new Map<string, Command[]>()
     for (const command of matches) {
-      const declared = (command as Command & { group?: string }).group
-      const name = declared ?? GROUP_BY_PREFIX[command.id.split('.')[0] ?? ''] ?? 'Other'
+      const name = command.group ?? GROUP_BY_PREFIX[command.id.split('.')[0] ?? ''] ?? 'Other'
       if (!byGroup.has(name)) {
         byGroup.set(name, [])
         order.push(name)

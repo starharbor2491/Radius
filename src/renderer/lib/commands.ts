@@ -137,7 +137,7 @@ export function useCommands(): Command[] {
   const workspaces = useAppStore((store) => store.state.workspaces)
   const activeWorkspaceId = useAppStore((store) => store.state.activeWorkspaceId)
   const ui = useUiStore()
-  const { theme, presets, applyPreset, update } = useTheme()
+  const { theme, presets, applyPreset, applyTheme, update } = useTheme()
   const bindings = useKeybindings()
   const isMac = useMemo(detectIsMac, [])
 
@@ -286,8 +286,15 @@ export function useCommands(): Command[] {
         title: 'Import theme from file…',
         group: 'Appearance',
         run: () => {
+          // An imported document is not a preset -- it is a whole theme, and
+          // applying it by id would silently do nothing.
           void bridge.invoke('theme:importFile', {}).then((imported) => {
-            if (imported.theme) applyPreset(imported.theme.id)
+            if (imported.status === 'imported' && imported.theme) applyTheme(imported.theme)
+            else if (imported.status === 'failed') {
+              ui.showToast(
+                imported.error || `Theme file rejected: ${imported.issues[0]?.path ?? 'unknown'}`
+              )
+            }
           })
         }
       },
@@ -440,6 +447,7 @@ export function useCommands(): Command[] {
     theme,
     presets,
     applyPreset,
+    applyTheme,
     update,
     bindings,
     isMac
