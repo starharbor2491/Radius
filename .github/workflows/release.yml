@@ -1,0 +1,119 @@
+name: Release
+
+# Builds Radius on real macOS runners and attaches the results to a release,
+# so `install-mac.sh` can download instead of building from source.
+#
+# Trigger by pushing a tag:  git tag v0.1.0 && git push origin v0.1.0
+# Or run it by hand from the Actions tab.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish as (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      # The chrome renders headlessly under xvfb; this is the same check that
+      # runs locally, and it catches a broken bundle before anything ships.
+      - run: npm run build
+      - run: xvfb-run -a npx electron --no-sandbox scripts/smoke-renderer.cjs /tmp/smoke.png
+
+  build-mac:
+    needs: verify
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Build and package
+        run: npx electron-vite build && npx electron-builder --mac --${{ matrix.arch }} --publish never
+
+      # Radius has no paid Apple identity, so the app is ad-hoc signed. That is
+      # enough for macOS to load it; it is not notarised, so first launch still
+      # needs the user's confirmation (the installer clears quarantine for them).
+      # The output directory is `release/mac` for x64 and `release/mac-arm64`
+      # for arm64; finding the bundle is steadier than reproducing that rule.
+      - name: Ad-hoc sign
+        run: |
+          APP="$(find release -maxdepth 2 -name 'Radius.app' -print -quit)"
+          if [ -z "$APP" ]; then
+            echo "::error::No Radius.app was produced"
+            ls -R release || true
+            exit 1
+          fi
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose "$APP"
+          echo "Signed $APP"
+
+      - name: Check the bundle is well formed
+        run: |
+          APP="$(find release -maxdepth 2 -name 'Radius.app' -print -quit)"
+          test -f "$APP/Contents/MacOS/Radius" || { echo "::error::no executable"; exit 1; }
+          test -f "$APP/Contents/Resources/app.asar" || { echo "::error::no app.asar"; exit 1; }
+          test -f "$APP/Contents/Resources/icon.icns" || echo "::warning::no icon"
+          ls release/*.zip release/*.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: radius-mac-${{ matrix.arch }}
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build-mac
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Radius ${{ github.event.inputs.tag || github.ref_name }}
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install-mac.sh | bash
+            ```
+
+            Downloads the right build for your Mac, installs it to
+            `/Applications`, and opens it.
+
+            These builds are **ad-hoc signed but not notarised** — Radius has no
+            paid Apple Developer identity. The installer clears the quarantine
+            flag so the app opens normally. If you download a `.dmg` by hand
+            instead, right-click the app and choose Open the first time.

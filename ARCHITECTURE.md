@@ -8,11 +8,13 @@ main process (Node)
 │   └── contentView
 │       ├── ChromeView (WebContentsView)   ← React UI, transparent, full window
 │       └── PageView[] (WebContentsView)   ← one per awake tab, inset
-├── StateStore        authoritative app state, SQLite-backed
+├── StateStore        authoritative app state, JSON-backed
 ├── TabManager        tab lifecycle, suspension, session restore
 ├── ProviderRegistry  AI adapters, model catalogue, routing, cost
 ├── SecretStore       safeStorage-encrypted API keys
 ├── ThemeService      theme persistence and file import/export
+├── DownloadService   tracks transfers started by page content
+├── AgentController   synthetic mouse/keyboard, visible cursor, element map
 └── PageContextService  readable-text extraction for the AI panel
 ```
 
@@ -76,7 +78,7 @@ Main owns the state; the renderer mirrors it.
 
 ```
 user gesture → IPC invoke → zod validation → StateStore mutation
-             → SQLite write → coalesced notify → `state:changed` snapshot
+             → JSON write → coalesced notify → `state:changed` snapshot
              → zustand store → React
 ```
 
@@ -92,17 +94,34 @@ Two deliberate M1 tradeoffs:
   on the next microtask.
 
 Runtime facts — `loading`, `suspended`, `canGoBack`/`canGoForward` — live in an
-in-memory map, never in SQLite. After a restart every tab is suspended until
+in-memory map, never on disk. After a restart every tab is suspended until
 focused, which is what makes restoring 200 tabs instant.
 
 ### Persistence
 
-One SQLite file (`radius.db`) in the user data directory, in WAL mode, migrated
-by `user_version` pragma with hand-written forward migrations
-(`src/main/db/migrations.ts`). No codegen step ships in the packaged app.
+One JSON document (`radius-state.json`) in the user data directory, held in
+memory and written atomically — temp file plus rename, so a crash mid-write
+leaves the previous document intact rather than a truncated one. Writes are
+debounced ~300ms because a single page load mutates state several times; secrets
+flush immediately.
 
-Tables: `workspaces`, `tab_groups`, `tabs`, `closed_tabs`, `bookmark_folders`,
-`bookmarks`, `settings`, `secrets`, `providers`, `usage_records`.
+Collections: `workspaces`, `groups`, `tabs`, `closedTabs`, `bookmarkFolders`,
+`bookmarks`, `history`, `downloads`, `providers`, `usage`, `secrets`, `settings`.
+
+**This replaced SQLite deliberately.** `better-sqlite3` is a native module, so
+every install needed a C++ toolchain and an `electron-rebuild` pass against
+Electron's ABI — by far the most fragile step in getting the app running, and
+unnecessary at this data scale. A browser's own state is a few hundred KB; a
+JSON document in memory beats a query planner for it, and setup collapses to
+`npm install && npm run dev`.
+
+The limit is real and bounded: this does not scale to the full-text and vector
+search that semantic history wants in M5. That feature can bring its own index
+without disturbing anything here.
+
+An unreadable document is moved aside and the app starts empty, because a
+browser that refuses to open because its state file is malformed is worse than
+one that opens fresh.
 
 ### Tab ordering
 
@@ -141,6 +160,20 @@ churn constantly, so the OpenAI and Google adapters ship no default list and
 call `/v1/models` and `/v1beta/models` instead. A stale hardcoded list is worse
 than an empty one.
 
+**Every reachable provider is seeded at first launch.** `seedBuiltIns` walks
+`seedableCatalogEntries()` rather than the three native adapters, so OpenAI,
+Gemini, Grok, DeepSeek, OpenRouter, Fireworks, DeepInfra, Cerebras and the rest
+are on the list from the start, each one a pasted key away from working.
+
+The two rules above collide in a way worth stating: a seeded provider has no
+models until discovery runs, and discovery needs a key. Earlier builds resolved
+that by hiding model-less providers from the pickers, which meant a browser
+shipping thirty providers offered exactly one — Anthropic, the only adapter with
+a default list. Now `setKey` kicks off discovery itself, and `ModelPicker`
+degrades to a typed model id plus a Discover button rather than hiding the
+provider. Removing a seeded provider records it under `aiDismissedProviders`, or
+the next boot would seed it straight back.
+
 **Cost** is computed from published pricing when it is known and reported as
 zero when it is not. The meter never invents a figure.
 
@@ -148,6 +181,34 @@ zero when it is not. The meter never invents a figure.
 HTTP happens in main. The renderer learns only that a provider `hasKey`, never
 what the key is. On a Linux box with no keychain, `SecretStore` refuses to store
 anything rather than implying a guarantee it cannot keep.
+
+### Routing and budgets
+
+`src/shared/routing.ts` holds two pure ideas that `ProviderRegistry.run` walks:
+*which* provider+model pairs a feature should try, in order, and *whether* a
+given failure is worth trying the next one for.
+
+Failing over is deliberately narrow. A rate limit (429), a server fault (5xx), a
+request timeout or a dead socket means the provider could not answer *this
+time*, so the next candidate gets a turn. A 401, 403 or 400 means the request
+itself was refused — a missing key, a malformed body, a model id that does not
+exist — and handing the same request to the next provider would spend its quota
+to produce the same error with the original hidden behind it. Anything
+unrecognised does not fail over: a chain is a resilience feature, not a reason
+to fan an unknown fault across every provider a user owns.
+
+The hard rule is that **a run never fails over once a token has been emitted**.
+A half-written answer must not get a second author; the user would read one
+paragraph from one model continued by another with no seam to see. A fallback
+that does happen is announced as a `notice` stream event, because the answer
+came from somewhere other than what the dropdown says.
+
+`src/shared/budget.ts` evaluates recorded usage against a monthly limit and
+returns `ok` / `warn` / `over`; `over` plus the `block` action stops a run
+before the provider is called. Because `estimateCost` reports zero for a model
+with no published pricing, this is a bound on *tracked* spend, and every surface
+that shows it says so — the usage panel names how many runs were unpriced rather
+than letting the total imply completeness.
 
 ### Page context
 
@@ -181,11 +242,201 @@ Colours are OKLCH strings. `src/shared/color.ts` implements OKLCH → linear sRG
 and WCAG contrast so the Theme Studio can warn about a failing pair — a browser's
 computed style cannot answer that question for a colour you have not applied yet.
 
+### Themes compose; they do not overwrite
+
+Three documents stack, most specific last:
+
+```
+global theme            settings.theme, one complete document
+  └── workspace.themeId        a preset the workspace pins as its base instead
+        └── workspace.themeOverride   a partial document, any subset of tokens
+```
+
+`workspace.accent` is deliberately *not* in that chain, though it used to be. It
+is the workspace's identity colour in the rail, assigned at creation from a
+rotating palette — nobody chose it. While it masked the theme's accent, applying
+a theme never changed the accent, which made a gallery of previews lie about
+what its presets look like. A workspace that wants a different accent overrides
+`colors.accent` like any other token; the studio writes the chip colour to match
+when it does.
+
+Merging happens on the **document**, not on resolved CSS variables, and the
+result goes back through `ThemeSchema`. That is what makes an override safe to
+store loosely: a workspace can name a token this build has never heard of, or a
+value out of range, and the merge reports it (`resolveThemeOverride` returns the
+issues) instead of painting something wrong. A broken override leaves the base
+theme visible rather than a broken window.
+
+A workspace stores the *difference* from its base, never a copy of it —
+`themeOverrideDiff` is applied on every write. A workspace that wanted a denser
+layout carries two tokens and inherits every later edit to the other ninety.
+
+### A theme file is a partial document
+
+`.radius-theme.json` round-trips through the same schema in both directions.
+Export writes the resolved document because it is meant to be readable; import
+accepts anything from that down to two tokens, which is what `.prefault({})` on
+every nested object buys.
+
+Import returns a *report*, not a theme-or-null. "Invalid theme" is useless to
+someone hand-editing JSON, so `parseThemeDocument` keeps zod's path and the
+studio prints `glass.chrome.blur — Too big: expected number to be <=200`. A file
+that parses reports how many tokens it actually named, so a three-line theme
+says three rather than implying it set the ninety it resolved to.
+
+Both directions live in main (`ThemeService`): file dialogs are a main-process
+capability. Import deliberately does not apply what it read — the renderer holds
+the "what was in use before" that the gallery's revert needs, so importing is a
+read and applying is the same `theme:set` any other edit takes.
+
+### The gallery previews with the real engine
+
+`resolveThemeVars` is pure and returns nothing but custom properties, so setting
+its output on an element instead of on `:root` renders a second complete theme
+inside the first. A gallery card is not a picture of a theme; it is the same
+token engine scoped to a box, which is why a dense preset previews dense and one
+with no blur previews flat.
+
+Hovering a card applies it to the whole window anyway, because a 150px
+miniature cannot tell you whether a theme is comfortable to read a tab strip in.
+Nothing persists until the card is clicked, and the header keeps a way back to
+what was in use when the gallery opened — a live preview is only honest if
+leaving it is free.
+
+### User CSS, and the `data-radius-part` contract
+
+User CSS is the one place a person hands Radius something free-form. It is CSS,
+it is injected into the **chrome view only** — never into a page view — and it
+is never evaluated as script. It is applied by assigning `textContent` on one
+`<style>` element, so it cannot introduce markup, and `sanitizeUserCss` strips
+`@import` and remote `url()` (a theme is a local document; picking a colour
+should not make a network request) along with the legacy script-in-CSS vectors.
+Everything stripped is reported at the editor rather than dropped silently, and
+the document keeps what the user typed so they can fix it.
+
+What that CSS aims at is a stable name. Class names are not one — `rx-tab` is an
+implementation detail of the stylesheet and a refactor may rename it. These
+attributes are the promise instead, listed in `src/renderer/theme/parts.ts` and
+pinned by `tests/theme-parts.test.ts`, which fails if one is documented but not
+rendered:
+
+| `data-radius-part` | What it marks |
+|---|---|
+| `shell` | The chrome's root element |
+| `sidebar` | The whole left sidebar |
+| `workspace-rail` | The icon rail inside the sidebar |
+| `workspace-chip` | One workspace button in the rail |
+| `tab-strip` | The scrolling list of tabs |
+| `tab` | One tab row |
+| `toolbar` | The top bar holding navigation and the omnibox |
+| `omnibox` | The address field and its display state |
+| `find-bar` | Find in page |
+| `panel` | The body of a docked panel |
+| `panel-header` | That panel's title row |
+| `panel-title` | The title text itself |
+| `command-palette` | The command palette surface |
+| `button` | Every text button |
+| `icon-button` | Every icon-only button |
+| `field` | A labelled control |
+| `field-label` | That control's label |
+| `slider` | Every range input bound to a token |
+| `toast` | The transient message |
+| `glass` | Any glass surface (pair with `data-surface`) |
+| `theme-gallery` | The gallery section |
+| `theme-card` | One preset card |
+
+Adding a part is additive and cheap. Removing or renaming one breaks every theme
+a user has written, so it takes the same care as changing an IPC channel.
+
+### Contrast is reported, never corrected
+
+`auditThemeContrast` grades the six pairs the chrome actually renders — body
+text on a panel and on the window backdrop, muted and faint text, a label on an
+accent button, and the accent against a panel — each against the WCAG threshold
+that applies to it (4.5:1 for text, 3:1 for hint text and for non-text UI under
+1.4.11).
+
+A failing pair is named at the control that causes it, with the measured ratio
+and the rule it missed. Nothing is silently nudged into range: a user who wants
+a low-contrast theme gets one and is told what it costs. Gallery cards carry the
+same badge, and no shipped preset fails its own check — a test asserts that.
+
+## The layout system
+
+The chrome is not a fixed frame. `src/shared/layout.ts` holds a zod-validated
+document naming three regions — `left`, `right`, `bottom` — each with an ordered
+panel list, which panel is active, and a size. Panels are dragged between
+regions by their title bar, and the arrangement is stored **per workspace**, so
+a research workspace and a writing workspace can be shaped differently.
+
+The default document puts all seven panels in `right` with none active, which
+reproduces the previously hardcoded chrome exactly. A workspace persisted before
+the layout editor existed parses through `parseLayout` rather than arriving as
+`undefined`.
+
+Two constraints deserve stating, because both are consequences of the z-order:
+
+- **Every region has to be measured.** Main places the page view from insets the
+  renderer reports; a region main does not know about is a region the page view
+  covers. `reportInsets` measures the bottom dock's height and the left dock's
+  width alongside the sidebar, and effects key on `layoutSignature` so a favicon
+  landing does not restart inset polling.
+- **Dragging enters overlay mode.** The left and bottom drop targets sit over
+  ground the page view owns, so without raising the chrome the user would be
+  dragging toward an invisible target.
+
+`top` and `floating` are deliberately absent. The toolbar is not a panel — it is
+the window's own furniture, and a floating region needs a window manager's worth
+of behaviour (focus, stacking, off-screen recovery) to not be a trap.
+
+Reordering panels *within* a region is supported by the document and the pure
+functions but has no gesture yet; only whole-region drops are wired.
+
+## The agent
+
+The assistant can drive a page. Three decisions make it work:
+
+**Real input events, not synthetic clicks.** `webContents.sendInputEvent`
+rather than calling `element.click()` from the preload. Synthetic DOM clicks
+are untrusted events that plenty of sites ignore, and they cannot type into a
+React-controlled input convincingly. Real events behave exactly like a person's.
+
+**The cursor is drawn inside the page.** The page is a native view stacked
+above the chrome, so anything the chrome painted would be hidden behind it. The
+page preload owns a `pointer-events: none` overlay in a closed shadow root, so
+page CSS cannot restyle it and it never intercepts a click meant for the page.
+
+**JSON actions, not provider tool-calls.** Tool-calling APIs differ per vendor
+and are missing from many OpenAI-compatible endpoints. Asking any model for one
+JSON object per step is what makes the agent work on *every* provider rather
+than the three with the richest API. `parseAgentAction` digs the object out of
+prose and code fences, because models add commentary regardless of instructions.
+
+The safety properties are structural rather than advisory: the cursor is always
+visible while acting, it glides rather than teleports, only viewport-visible
+elements are offered to the model, runs are capped at `MAX_AGENT_STEPS`, Stop
+cancels mid-action, and the system prompt refuses credentials and checkout.
+
+## Find in page
+
+`webContents.findInPage` has a genuine trap: `findNext: true` means *begin a new
+find session* and `false` means *advance within the current one* — the reverse
+of what the name suggests. Sending `false` with no session open reports nothing
+at all, silently. A new or edited query therefore sends `true`; the next/previous
+buttons send `false`. This is noted at the IPC contract and at the call site
+because it costs an hour to rediscover.
+
+The find bar lives inside the chrome strip rather than as an overlay, so the
+page stays scrollable and interactive while you search it — overlay mode would
+make the whole page inert.
+
 ## Deliberate non-goals for M1
 
 - **No plugin API.** Customization is declarative data. This was an explicit
   product decision, not a scheduling one.
 - **No Chrome extensions.** Electron's `chrome.*` surface is partial and this is
   a large scope of its own; it sits past M5.
-- **One window.** Nothing in `WindowManager`/`TabManager` assumes it, but
+- **One window.** Nothing in `RadiusWindow`/`TabManager` assumes it, but
   multi-window is not wired up yet.
+- **Zoom is per tab, not per site.** It lives in the runtime map, so it resets
+  when a tab is suspended. Per-origin persistence is a later change.

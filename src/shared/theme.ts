@@ -1,6 +1,14 @@
 import { z } from 'zod'
 import { TAB_GROUP_COLORS } from './types'
-import { formatOklch, parseOklch, withAlpha } from './color'
+import {
+  checkContrast,
+  formatOklch,
+  parseOklch,
+  withAlpha,
+  AA_LARGE,
+  AA_TEXT,
+  type ContrastGrade
+} from './color'
 
 /**
  * The Radius token engine.
@@ -53,6 +61,14 @@ export const ColorTokensSchema = z
     accentText: z.string().default('oklch(0.16 0.02 285)'),
     border: z.string().default('oklch(1 0 0 / 0.10)'),
     borderStrong: z.string().default('oklch(1 0 0 / 0.20)'),
+    /**
+     * The dim behind a modal surface.
+     *
+     * Authored rather than derived from `bg`: the same black at 28% is a
+     * whisper over a dark window and a bruise over a light one, so a light
+     * theme has to be able to set its own.
+     */
+    scrim: z.string().default('oklch(0 0 0 / 0.28)'),
     success: z.string().default('oklch(0.74 0.15 150)'),
     warning: z.string().default('oklch(0.80 0.14 85)'),
     danger: z.string().default('oklch(0.65 0.19 25)'),
@@ -133,10 +149,24 @@ export const GeometryTokensSchema = z
     borderWidth: z.number().default(1),
     /** Multiplies every spacing and control height. */
     density: z.enum(['compact', 'normal', 'comfortable']).default('normal'),
+    /**
+     * How far a disabled control fades. A token because "disabled" is a
+     * legibility decision, not a constant: a high-contrast theme needs to raise
+     * it, and 0.55 of a faint colour is close to invisible.
+     */
+    disabledOpacity: z.number().min(0).max(1).default(0.55),
     /** Gap between the chrome and the inset page view, in px. */
     pageInset: z.number().min(0).max(64).default(8),
     /** Corner radius applied to the page view itself. */
-    pageRadius: z.number().min(0).max(48).default(12)
+    pageRadius: z.number().min(0).max(48).default(12),
+    /**
+     * The narrowest the page is allowed to get, in px.
+     *
+     * A floor rather than a preference: docked panels shrink to respect it, so
+     * a layout carried onto a smaller screen gives ground in the chrome instead
+     * of squeezing the web page down to nothing.
+     */
+    viewportMin: z.number().min(0).max(800).default(240)
   })
   .prefault({})
 export type GeometryTokens = z.infer<typeof GeometryTokensSchema>
@@ -270,6 +300,8 @@ export const ThemeSchema = z.object({
   id: z.string().default('custom'),
   name: z.string().default('Custom'),
   author: z.string().default(''),
+  /** One line of prose for the gallery card. Optional; never invented. */
+  description: z.string().default(''),
   colors: ColorTokensSchema,
   glass: GlassTokensSchema,
   geometry: GeometryTokensSchema,
@@ -287,6 +319,369 @@ export function parseTheme(input: unknown): Theme {
 }
 
 export const defaultTheme = (): Theme => parseTheme({})
+
+/* ------------------------------------------------------------------ *
+ * Reading a document a human wrote
+ * ------------------------------------------------------------------ */
+
+export const ThemeIssueSchema = z.object({
+  /** Dotted token path, e.g. `glass.chrome.blur`. `(document)` for the root. */
+  path: z.string(),
+  message: z.string()
+})
+export type ThemeIssue = z.infer<typeof ThemeIssueSchema>
+
+export type ThemeParseResult =
+  | { ok: true; theme: Theme }
+  | { ok: false; issues: ThemeIssue[] }
+
+const ROOT_PATH = '(document)'
+
+function issuePath(path: ReadonlyArray<PropertyKey>): string {
+  return path.length === 0 ? ROOT_PATH : path.map((part) => String(part)).join('.')
+}
+
+/**
+ * Parses a theme document and, when it fails, says *which field* failed.
+ *
+ * "Invalid theme" is useless to someone hand-editing a JSON file: the whole
+ * point of a token document is that you can write three lines of it, so the one
+ * line that is wrong has to be namable. zod already knows the path; this only
+ * has to keep it rather than throwing it away.
+ */
+export function parseThemeDocument(input: unknown): ThemeParseResult {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          path: ROOT_PATH,
+          message: `expected a JSON object of tokens, received ${describeValue(input)}`
+        }
+      ]
+    }
+  }
+
+  const result = ThemeSchema.safeParse(input)
+  if (result.success) return { ok: true, theme: result.data }
+  return {
+    ok: false,
+    issues: result.error.issues.map((issue) => ({
+      path: issuePath(issue.path),
+      message: issue.message
+    }))
+  }
+}
+
+/**
+ * What came back from the import dialog.
+ *
+ * Flat rather than a discriminated union because it crosses IPC and gets
+ * rendered directly: every field is present, `status` says which ones matter.
+ */
+export const ThemeImportResultSchema = z.object({
+  status: z.enum(['imported', 'cancelled', 'failed']),
+  theme: ThemeSchema.nullable().default(null),
+  path: z.string().nullable().default(null),
+  /** Token paths the file actually named, so the studio can report the count. */
+  setPaths: z.array(z.string()).default([]),
+  issues: z.array(ThemeIssueSchema).default([]),
+  /** A failure that is not a token problem: unreadable file, malformed JSON. */
+  error: z.string().default('')
+})
+export type ThemeImportResult = z.infer<typeof ThemeImportResultSchema>
+
+function describeValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return 'an array'
+  if (typeof value === 'string') return `the string ${JSON.stringify(value)}`
+  return `a ${typeof value}`
+}
+
+/* ------------------------------------------------------------------ *
+ * Partial documents: overrides, merging, diffing
+ * ------------------------------------------------------------------ */
+
+/**
+ * A partial token document: any subset of the theme shape.
+ *
+ * A workspace stores one of these rather than a copy of the whole theme, so a
+ * workspace that only wants a denser layout carries two tokens and inherits
+ * every later change to the base theme.
+ */
+export const ThemeOverrideSchema = z.record(z.string(), z.unknown())
+export type ThemeOverride = z.infer<typeof ThemeOverrideSchema>
+
+type JsonRecord = Record<string, unknown>
+
+function isPlainObject(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Deep-merges a partial document over a base one. Objects merge key by key;
+ * anything else replaces. Neither input is mutated.
+ */
+export function mergeThemeDocuments(base: unknown, patch: unknown): unknown {
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch === undefined ? base : patch
+  const result: JsonRecord = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue
+    result[key] = isPlainObject(value) ? mergeThemeDocuments(result[key], value) : value
+  }
+  return result
+}
+
+/**
+ * Applies a partial override to a resolved theme.
+ *
+ * Merging happens on the *document*, not on resolved CSS variables, so the
+ * result goes back through the schema and an override naming a token that does
+ * not exist -- or a value out of range -- is reported rather than silently
+ * painting something wrong.
+ */
+export function resolveThemeOverride(
+  theme: Theme,
+  override: ThemeOverride | null | undefined
+): { theme: Theme; issues: ThemeIssue[] } {
+  if (!override || Object.keys(override).length === 0) return { theme, issues: [] }
+  const merged = mergeThemeDocuments(theme, override)
+  const result = parseThemeDocument(merged)
+  // A broken override leaves the base theme visible rather than a broken app;
+  // the issues travel with it so the studio can say what was ignored.
+  return result.ok ? { theme: result.theme, issues: [] } : { theme, issues: result.issues }
+}
+
+export function applyThemeOverride(
+  theme: Theme,
+  override: ThemeOverride | null | undefined
+): Theme {
+  return resolveThemeOverride(theme, override).theme
+}
+
+/**
+ * The minimal document that turns `base` into `next`.
+ *
+ * This is what makes "edit this workspace" work with the same controls as
+ * "edit the theme": the studio writes a whole theme, and the diff against the
+ * base is what gets stored on the workspace.
+ */
+export function themeOverrideDiff(base: unknown, next: unknown): ThemeOverride {
+  const diff: JsonRecord = {}
+  if (!isPlainObject(base) || !isPlainObject(next)) return diff
+  for (const [key, value] of Object.entries(next)) {
+    const previous = base[key]
+    if (isPlainObject(value) && isPlainObject(previous)) {
+      const nested = themeOverrideDiff(previous, value)
+      if (Object.keys(nested).length > 0) diff[key] = nested
+    } else if (!Object.is(previous, value)) {
+      diff[key] = value
+    }
+  }
+  return diff
+}
+
+/** Flattens an override to `{ path, value }` leaves, for showing what it changes. */
+export function flattenThemeOverride(
+  override: ThemeOverride | null | undefined,
+  prefix = ''
+): Array<{ path: string; value: unknown }> {
+  if (!override) return []
+  const leaves: Array<{ path: string; value: unknown }> = []
+  for (const [key, value] of Object.entries(override)) {
+    const path = prefix ? `${prefix}.${key}` : key
+    if (isPlainObject(value)) leaves.push(...flattenThemeOverride(value, path))
+    else leaves.push({ path, value })
+  }
+  return leaves
+}
+
+/** Removes one dotted token path from an override, pruning empty parents. */
+export function withoutThemeOverridePath(
+  override: ThemeOverride,
+  path: string
+): ThemeOverride {
+  const [head, ...rest] = path.split('.')
+  if (head === undefined) return override
+  const next: JsonRecord = { ...override }
+  if (rest.length === 0) {
+    delete next[head]
+    return next
+  }
+  const child = next[head]
+  if (!isPlainObject(child)) return next
+  const pruned = withoutThemeOverridePath(child, rest.join('.'))
+  if (Object.keys(pruned).length === 0) delete next[head]
+  else next[head] = pruned
+  return next
+}
+
+/* ------------------------------------------------------------------ *
+ * User CSS
+ * ------------------------------------------------------------------ */
+
+export interface UserCssResult {
+  css: string
+  /** What was removed, in the user's terms. Never silent. */
+  warnings: string[]
+}
+
+/**
+ * Prepares user CSS for injection into the chrome.
+ *
+ * This is the one place a user hands Radius something free-form, so it is worth
+ * being explicit about what it is: a stylesheet, injected into the chrome view
+ * only, never into a page view, and never evaluated as script. It is applied by
+ * assigning `textContent` on a `<style>` element, so it cannot introduce markup.
+ *
+ * Two constructs are stripped rather than trusted, and both are reported:
+ *
+ * - `@import`, which would fetch a stylesheet from the network. A theme is a
+ *   local document; nothing about picking a colour should make a request.
+ * - remote `url()`, which leaks a request (and therefore the fact that the
+ *   chrome is open) to a third party. `data:` URIs are kept -- they are inert
+ *   and are how a self-contained theme ships an image.
+ *
+ * Legacy script-in-CSS vectors (`expression()`, `-moz-binding`, `behavior`)
+ * are stripped too. No engine Radius runs on supports them; they go because
+ * "does not execute third-party code" should not rest on that.
+ */
+export function sanitizeUserCss(input: string): UserCssResult {
+  const warnings: string[] = []
+  let css = input
+
+  const drop = (pattern: RegExp, warning: string): void => {
+    if (!pattern.test(css)) return
+    css = css.replace(pattern, '')
+    warnings.push(warning)
+  }
+
+  drop(/@import[^;{]*(;|$)/gi, '@import was removed: user CSS may not fetch from the network.')
+  drop(
+    /url\(\s*(['"]?)(?!data:)[a-z0-9+.-]*:\/\/[^)]*\1\s*\)/gi,
+    'A remote url() was removed: user CSS may not load from the network. Inline it as a data: URI.'
+  )
+  drop(/expression\s*\(/gi, 'expression() was removed: user CSS is never evaluated as script.')
+  drop(/-moz-binding\s*:[^;}]*/gi, '-moz-binding was removed: user CSS may not bind behaviour.')
+  drop(/(^|[;{\s])behavior\s*:[^;}]*/gi, 'behavior was removed: user CSS may not bind behaviour.')
+  // Belt and braces: `textContent` cannot introduce markup, but a future caller
+  // that builds a stylesheet string should not be the one to discover that.
+  drop(/<\/?style[^>]*>/gi, 'A <style> tag was removed: this field takes CSS, not HTML.')
+
+  return { css, warnings }
+}
+
+/* ------------------------------------------------------------------ *
+ * Contrast honesty
+ * ------------------------------------------------------------------ */
+
+export interface ContrastFinding {
+  id: string
+  label: string
+  /** Dotted token paths, so the studio can point at the control that owns it. */
+  foreground: string
+  background: string
+  /** WCAG minimum this pair is held to, and why it is that number. */
+  minimum: number
+  reason: string
+  /** null when a colour is not an OKLCH string we can measure. */
+  ratio: number | null
+  grade: ContrastGrade | null
+  passes: boolean
+}
+
+const CONTRAST_PAIRS: Array<{
+  id: string
+  label: string
+  foreground: string
+  background: string
+  minimum: number
+  reason: string
+}> = [
+  {
+    id: 'text-surface',
+    label: 'Text on a panel',
+    foreground: 'colors.text',
+    background: 'colors.surface1',
+    minimum: AA_TEXT,
+    reason: 'body text'
+  },
+  {
+    id: 'text-bg',
+    label: 'Text on the window backdrop',
+    foreground: 'colors.text',
+    background: 'colors.bg',
+    minimum: AA_TEXT,
+    reason: 'body text'
+  },
+  {
+    id: 'muted-surface',
+    label: 'Muted text on a panel',
+    foreground: 'colors.textMuted',
+    background: 'colors.surface1',
+    minimum: AA_TEXT,
+    reason: 'body text'
+  },
+  {
+    id: 'faint-surface',
+    label: 'Faint text on a panel',
+    foreground: 'colors.textFaint',
+    background: 'colors.surface1',
+    minimum: AA_LARGE,
+    reason: 'labels and hints'
+  },
+  {
+    id: 'accent-text',
+    label: 'Label on an accent button',
+    foreground: 'colors.accentText',
+    background: 'colors.accent',
+    minimum: AA_TEXT,
+    reason: 'body text'
+  },
+  {
+    id: 'accent-surface',
+    label: 'Accent against a panel',
+    foreground: 'colors.accent',
+    background: 'colors.surface1',
+    minimum: AA_LARGE,
+    reason: 'non-text UI (WCAG 1.4.11)'
+  }
+]
+
+function tokenAt(theme: Theme, path: string): string | undefined {
+  const value = path
+    .split('.')
+    .reduce<unknown>((node, key) => (isPlainObject(node) ? node[key] : undefined), theme)
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * Grades every colour pair the chrome actually renders.
+ *
+ * The token engine is the only thing that can answer this: a computed style
+ * cannot grade a colour that has not been applied yet, and a theme is edited
+ * live. Nothing here corrects a value -- a user who wants a low-contrast theme
+ * gets one, and is told what it costs.
+ */
+export function auditThemeContrast(theme: Theme): ContrastFinding[] {
+  return CONTRAST_PAIRS.map((pair) => {
+    const foreground = tokenAt(theme, pair.foreground)
+    const background = tokenAt(theme, pair.background)
+    const measured =
+      foreground && background ? checkContrast(foreground, background) : null
+    return {
+      ...pair,
+      ratio: measured?.ratio ?? null,
+      grade: measured?.grade ?? null,
+      passes: measured !== null && measured.ratio >= pair.minimum
+    }
+  })
+}
+
+/** Just the pairs that fail, which is what a warning surface wants. */
+export function failingContrast(theme: Theme): ContrastFinding[] {
+  return auditThemeContrast(theme).filter((finding) => !finding.passes)
+}
 
 /* ------------------------------------------------------------------ *
  * Resolution to CSS custom properties
@@ -320,6 +715,22 @@ function glassVars(name: string, surface: GlassTokens[GlassSurfaceName]): Record
   }
 }
 
+/**
+ * The caret a `<select>` paints for itself.
+ *
+ * A native select draws its arrow in the OS palette, which looks pasted on
+ * inside the chrome. The stylesheet replaces it with this background image --
+ * and because a background SVG cannot read `currentColor`, the colour has to be
+ * baked in here, where it stays a function of the theme rather than a literal
+ * in the stylesheet.
+ */
+function selectChevron(color: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+}
+
 function springVars(name: string, spring: SpringToken, scale: number): Record<string, string> {
   return {
     [`--rx-spring-${name}-stiffness`]: String(spring.stiffness),
@@ -350,12 +761,16 @@ export function resolveThemeVars(theme: Theme): Record<string, string> {
   vars['--rx-color-accent-text'] = colors.accentText
   vars['--rx-color-border'] = colors.border
   vars['--rx-color-border-strong'] = colors.borderStrong
+  vars['--rx-color-scrim'] = colors.scrim
   vars['--rx-color-success'] = colors.success
   vars['--rx-color-warning'] = colors.warning
   vars['--rx-color-danger'] = colors.danger
   for (const name of TAB_GROUP_COLORS) {
     vars[`--rx-color-group-${name}`] = colors.group[name]
   }
+  // Derived, not authored: the select caret has to carry its colour inside the
+  // image, so it is regenerated whenever the muted text token changes.
+  vars['--rx-select-chevron'] = selectChevron(colors.textMuted)
 
   for (const [level, shadow] of Object.entries(elevation)) {
     vars[`--rx-elevation-${level.replace('level', '')}`] = shadow
@@ -373,7 +788,9 @@ export function resolveThemeVars(theme: Theme): Record<string, string> {
   vars['--rx-radius-pill'] = `${geometry.radiusPill}px`
   vars['--rx-border-width'] = `${geometry.borderWidth}px`
   vars['--rx-density'] = String(density)
+  vars['--rx-opacity-disabled'] = String(geometry.disabledOpacity)
   vars['--rx-page-inset'] = `${geometry.pageInset}px`
+  vars['--rx-viewport-min'] = `${geometry.viewportMin}px`
   vars['--rx-page-radius'] = `${geometry.pageRadius}px`
   for (let step = 1; step <= 12; step += 1) {
     vars[`--rx-space-${step}`] = `${Math.round(geometry.spaceUnit * step * density)}px`
@@ -416,5 +833,8 @@ export function themeToCss(theme: Theme): string {
   const body = Object.entries(vars)
     .map(([key, value]) => `  ${key}: ${value};`)
     .join('\n')
-  return `:root {\n${body}\n}\n${theme.userCss}`
+  // User CSS is appended sanitised: anything producing a string of CSS is a
+  // thing that might get injected, and the guarantee should not depend on which
+  // caller it was.
+  return `:root {\n${body}\n}\n${sanitizeUserCss(theme.userCss).css}`
 }

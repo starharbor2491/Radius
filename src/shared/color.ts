@@ -125,10 +125,22 @@ export function contrastRatio(a: Oklch, b: Oklch): number {
 
 export type ContrastGrade = 'fail' | 'AA-large' | 'AA' | 'AAA'
 
+/**
+ * The three WCAG 2.1 thresholds Radius holds a token pair to. Named rather than
+ * inlined because every warning in the UI has to be able to say *which* rule a
+ * colour missed, not just that it missed one.
+ */
+/** 1.4.6 Contrast (Enhanced), body text. */
+export const AAA_TEXT = 7
+/** 1.4.3 Contrast (Minimum), body text. */
+export const AA_TEXT = 4.5
+/** 1.4.3 for large text, and 1.4.11 for non-text UI. */
+export const AA_LARGE = 3
+
 export function gradeContrast(ratio: number): ContrastGrade {
-  if (ratio >= 7) return 'AAA'
-  if (ratio >= 4.5) return 'AA'
-  if (ratio >= 3) return 'AA-large'
+  if (ratio >= AAA_TEXT) return 'AAA'
+  if (ratio >= AA_TEXT) return 'AA'
+  if (ratio >= AA_LARGE) return 'AA-large'
   return 'fail'
 }
 

@@ -85,6 +85,29 @@ const STATE = {
     }
   ],
   bookmarkFolders: [],
+  history: [
+    {
+      id: 'h-1',
+      url: 'https://example.com/article',
+      title: 'An article read earlier',
+      faviconUrl: null,
+      visitedAt: Date.now() - 3_600_000,
+      visitCount: 3
+    }
+  ],
+  downloads: [
+    {
+      id: 'd-1',
+      url: 'https://files.example/report.pdf',
+      filename: 'report.pdf',
+      savePath: '/tmp/report.pdf',
+      state: 'progressing',
+      receivedBytes: 512_000,
+      totalBytes: 2_048_000,
+      startedAt: Date.now() - 20_000,
+      completedAt: null
+    }
+  ],
   providers: [],
   settings: { searchEngineId: 'duckduckgo' }
 }
@@ -94,6 +117,9 @@ const RESPONSES = {
   'settings:get': STATE.settings,
   'ai:listProviders': [],
   'ai:usage': [],
+  'history:search': [],
+  // Empty on purpose: the editor must fall back to its defaults.
+  'keybindings:get': {},
   // An empty document: ThemeProvider re-parses it, so this exercises the
   // schema's defaulting path all the way to the CSS variables.
   'theme:get': { theme: {}, presets: [] }

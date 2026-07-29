@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { asc, desc, eq, gte } from 'drizzle-orm'
-import type { Db } from '../db'
-import { schema } from '../db'
+import { defaultLayout, parseLayout, type Layout } from '@shared/layout'
+import type { JsonStore } from '../store/JsonStore'
 import type {
   AppState,
   Bookmark,
   BookmarkFolder,
+  DownloadItem,
+  DownloadState,
+  HistoryEntry,
   Tab,
   TabGroup,
   TabGroupColor,
@@ -23,18 +25,25 @@ export interface TabRuntime {
   canGoBack: boolean
   canGoForward: boolean
   suspended: boolean
+  zoom: number
 }
 
 const DEFAULT_RUNTIME: TabRuntime = {
   loading: false,
   canGoBack: false,
   canGoForward: false,
-  suspended: true
+  suspended: true,
+  zoom: 1
 }
 
 const SETTING_ACTIVE_WORKSPACE = 'activeWorkspaceId'
 const SETTING_ACTIVE_TABS = 'activeTabIdByWorkspace'
+
 const CLOSED_TAB_LIMIT = 50
+const HISTORY_LIMIT = 10_000
+/** How much history the renderer gets in a snapshot; the panel searches the rest. */
+const HISTORY_SNAPSHOT_LIMIT = 200
+const DOWNLOAD_LIMIT = 200
 
 const DEFAULT_ACCENTS = [
   'oklch(0.70 0.17 285)',
@@ -46,28 +55,78 @@ const DEFAULT_ACCENTS = [
 
 type Listener = (state: AppState) => void
 
+/** Rows are stored as plain objects; these narrow the store's `unknown[]`. */
+interface TabRow extends Omit<Tab, 'suspended' | 'loading' | 'canGoBack' | 'canGoForward'> {
+  scrollY: number
+}
+
+interface ClosedTabRow {
+  id: string
+  workspaceId: string
+  url: string
+  title: string
+  faviconUrl: string | null
+  groupId: string | null
+  order: number
+  closedAt: number
+}
+
 /**
  * The authoritative store for everything the chrome renders.
  *
  * Main owns the state and the renderer mirrors it: every mutation lands here,
  * gets persisted, and then a fresh snapshot is pushed over `state:changed`.
- * Full snapshots rather than patches is a deliberate M1 tradeoff -- the payload
- * is a few KB and it removes a whole class of desync bugs. Patching is a later
- * optimisation, behind the same interface.
+ * Full snapshots rather than patches is a deliberate tradeoff -- the payload is
+ * a few KB and it removes a whole class of desync bugs.
  */
 export class StateStore {
   private readonly runtime = new Map<string, TabRuntime>()
   private readonly listeners = new Set<Listener>()
   private notifyQueued = false
 
-  constructor(private readonly db: Db) {}
+  constructor(private readonly store: JsonStore) {}
+
+  /* ------------------------------------------------------- collections */
+
+  private get workspaces(): Workspace[] {
+    return this.store.data.workspaces as Workspace[]
+  }
+  private get groups(): TabGroup[] {
+    return this.store.data.groups as TabGroup[]
+  }
+  private get tabRows(): TabRow[] {
+    return this.store.data.tabs as TabRow[]
+  }
+  private get closedTabs(): ClosedTabRow[] {
+    return this.store.data.closedTabs as ClosedTabRow[]
+  }
+  private get bookmarkRows(): Bookmark[] {
+    return this.store.data.bookmarks as Bookmark[]
+  }
+  private get folderRows(): BookmarkFolder[] {
+    return this.store.data.bookmarkFolders as BookmarkFolder[]
+  }
+  private get historyRows(): HistoryEntry[] {
+    return this.store.data.history as HistoryEntry[]
+  }
+  private get downloadRows(): DownloadItem[] {
+    return this.store.data.downloads as DownloadItem[]
+  }
+  private get usageRows(): UsageRecord[] {
+    return this.store.data.usage as UsageRecord[]
+  }
+
+  /** Marks the document dirty and schedules both a disk write and a UI push. */
+  private commit(): void {
+    this.store.touch()
+    this.notify()
+  }
 
   /* ---------------------------------------------------------- lifecycle */
 
   /** Creates the first workspace on a cold install so the UI is never empty. */
   ensureSeeded(): void {
-    const existing = this.db.select().from(schema.workspaces).all()
-    if (existing.length > 0) return
+    if (this.workspaces.length > 0) return
     this.createWorkspace({ name: 'Personal', icon: '◎' })
   }
 
@@ -98,8 +157,7 @@ export class StateStore {
   }
 
   setRuntime(tabId: string, patch: Partial<TabRuntime>): void {
-    const next = { ...this.getRuntime(tabId), ...patch }
-    this.runtime.set(tabId, next)
+    this.runtime.set(tabId, { ...this.getRuntime(tabId), ...patch })
     this.notify()
   }
 
@@ -110,20 +168,16 @@ export class StateStore {
   /* ---------------------------------------------------------- snapshot */
 
   snapshot(): AppState {
-    const workspaces = this.listWorkspaces()
-    const groups = this.listGroups()
-    const tabs = this.listTabs()
-    const bookmarks = this.listBookmarks()
-    const bookmarkFolders = this.listBookmarkFolders()
-
     return {
-      workspaces,
+      workspaces: this.listWorkspaces(),
       activeWorkspaceId: this.getActiveWorkspaceId(),
-      groups,
-      tabs,
+      groups: this.listGroups(),
+      tabs: this.listTabs(),
       activeTabIdByWorkspace: this.getActiveTabMap(),
-      bookmarks,
-      bookmarkFolders,
+      bookmarks: this.listBookmarks(),
+      bookmarkFolders: this.listBookmarkFolders(),
+      history: this.listHistory().slice(0, HISTORY_SNAPSHOT_LIMIT),
+      downloads: this.listDownloads(),
       // Providers are layered in by the registry, which owns key presence.
       providers: [],
       settings: this.getAllSettings()
@@ -132,99 +186,118 @@ export class StateStore {
 
   /* --------------------------------------------------------- workspaces */
 
+  /**
+   * Workspaces, oldest ordering first.
+   *
+   * The layout is normalised on the way out rather than trusted: a workspace
+   * persisted before the layout editor shipped has no `layout` key at all, and
+   * the renderer would otherwise read `undefined` and render nothing. Parsing
+   * here means one place has to know that, and the renderer always receives a
+   * complete document.
+   */
   listWorkspaces(): Workspace[] {
-    return this.db
-      .select()
-      .from(schema.workspaces)
-      .orderBy(asc(schema.workspaces.order))
-      .all()
-      .map((row) => ({
-        id: row.id,
-        name: row.name,
-        icon: row.icon,
-        accent: row.accent,
-        order: row.order,
-        themeId: row.themeId,
-        createdAt: row.createdAt
+    return [...this.workspaces]
+      .sort((a, b) => a.order - b.order)
+      .map((workspace) => ({
+        ...workspace,
+        layout: parseLayout(workspace.layout),
+        // Same reasoning for the theme override: absent on an older document,
+        // and the renderer merges it blind.
+        themeOverride: workspace.themeOverride ?? null
       }))
   }
 
+  /* ------------------------------------------------------------- layout */
+
+  getWorkspaceLayout(workspaceId: string): Layout {
+    const workspace = this.workspaces.find((candidate) => candidate.id === workspaceId)
+    return parseLayout(workspace?.layout)
+  }
+
+  /**
+   * Writes a layout back onto its workspace.
+   *
+   * Takes the whole document rather than a patch because every caller already
+   * has one: the pure moves in `@shared/layout` return a complete layout, so
+   * there is nothing to merge.
+   */
+  setWorkspaceLayout(workspaceId: string, layout: Layout): void {
+    const workspace = this.workspaces.find((candidate) => candidate.id === workspaceId)
+    if (!workspace) return
+    workspace.layout = layout
+    this.commit()
+  }
+
   createWorkspace(input: { name: string; icon: string; accent?: string }): Workspace {
-    const count = this.db.select().from(schema.workspaces).all().length
     const workspace: Workspace = {
       id: randomUUID(),
       name: input.name,
       icon: input.icon,
-      accent: input.accent ?? DEFAULT_ACCENTS[count % DEFAULT_ACCENTS.length]!,
-      order: count,
+      accent: input.accent ?? DEFAULT_ACCENTS[this.workspaces.length % DEFAULT_ACCENTS.length]!,
+      order: this.workspaces.length,
       themeId: null,
+      themeOverride: null,
+      layout: defaultLayout(),
       createdAt: Date.now()
     }
-    this.db.insert(schema.workspaces).values(workspace).run()
-    if (!this.getActiveWorkspaceId()) this.setActiveWorkspaceId(workspace.id)
-    this.notify()
+    this.workspaces.push(workspace)
+    if (!this.getActiveWorkspaceId()) this.setSetting(SETTING_ACTIVE_WORKSPACE, workspace.id)
+    this.commit()
     return workspace
   }
 
   updateWorkspace(
     workspaceId: string,
-    patch: Partial<Pick<Workspace, 'name' | 'icon' | 'accent' | 'themeId'>>
+    patch: Partial<Pick<Workspace, 'name' | 'icon' | 'accent' | 'themeId' | 'themeOverride'>>
   ): void {
-    this.db.update(schema.workspaces).set(patch).where(eq(schema.workspaces.id, workspaceId)).run()
-    this.notify()
+    const workspace = this.workspaces.find((candidate) => candidate.id === workspaceId)
+    if (!workspace) return
+    Object.assign(workspace, stripUndefined(patch))
+    this.commit()
   }
 
   deleteWorkspace(workspaceId: string): string[] {
-    const removed = this.listTabs().filter((tab) => tab.workspaceId === workspaceId)
-    this.db.delete(schema.workspaces).where(eq(schema.workspaces.id, workspaceId)).run()
+    const removed = this.tabRows.filter((tab) => tab.workspaceId === workspaceId).map((tab) => tab.id)
 
-    if (this.getActiveWorkspaceId() === workspaceId) {
-      const next = this.listWorkspaces()[0]
-      this.setActiveWorkspaceId(next?.id ?? null)
+    replaceInPlace(this.workspaces, this.workspaces.filter((w) => w.id !== workspaceId))
+    replaceInPlace(this.groups, this.groups.filter((g) => g.workspaceId !== workspaceId))
+    replaceInPlace(this.tabRows, this.tabRows.filter((t) => t.workspaceId !== workspaceId))
+    for (const tabId of removed) this.runtime.delete(tabId)
+
+    if (this.getSetting<string | null>(SETTING_ACTIVE_WORKSPACE, null) === workspaceId) {
+      this.setSetting(SETTING_ACTIVE_WORKSPACE, this.listWorkspaces()[0]?.id ?? null)
     }
     const activeTabs = this.getActiveTabMap()
     delete activeTabs[workspaceId]
     this.setSetting(SETTING_ACTIVE_TABS, activeTabs)
-    this.notify()
-    return removed.map((tab) => tab.id)
+
+    this.commit()
+    return removed
   }
 
   reorderWorkspaces(orderedIds: string[]): void {
     orderedIds.forEach((id, index) => {
-      this.db.update(schema.workspaces).set({ order: index }).where(eq(schema.workspaces.id, id)).run()
+      const workspace = this.workspaces.find((candidate) => candidate.id === id)
+      if (workspace) workspace.order = index
     })
-    this.notify()
+    this.commit()
   }
 
   getActiveWorkspaceId(): string | null {
     const stored = this.getSetting<string | null>(SETTING_ACTIVE_WORKSPACE, null)
-    if (stored && this.db.select().from(schema.workspaces).where(eq(schema.workspaces.id, stored)).get()) {
-      return stored
-    }
+    if (stored && this.workspaces.some((workspace) => workspace.id === stored)) return stored
     return this.listWorkspaces()[0]?.id ?? null
   }
 
   setActiveWorkspaceId(workspaceId: string | null): void {
     this.setSetting(SETTING_ACTIVE_WORKSPACE, workspaceId)
-    this.notify()
+    this.commit()
   }
 
   /* -------------------------------------------------------------- groups */
 
   listGroups(): TabGroup[] {
-    return this.db
-      .select()
-      .from(schema.tabGroups)
-      .orderBy(asc(schema.tabGroups.order))
-      .all()
-      .map((row) => ({
-        id: row.id,
-        workspaceId: row.workspaceId,
-        title: row.title,
-        color: row.color as TabGroupColor,
-        collapsed: row.collapsed,
-        order: row.order
-      }))
+    return [...this.groups].sort((a, b) => a.order - b.order)
   }
 
   createGroup(input: {
@@ -233,7 +306,7 @@ export class StateStore {
     color: TabGroupColor
     tabIds: string[]
   }): TabGroup {
-    const siblings = this.listGroups().filter((g) => g.workspaceId === input.workspaceId)
+    const siblings = this.groups.filter((group) => group.workspaceId === input.workspaceId)
     const group: TabGroup = {
       id: randomUUID(),
       workspaceId: input.workspaceId,
@@ -242,40 +315,37 @@ export class StateStore {
       collapsed: false,
       order: siblings.length
     }
-    this.db.insert(schema.tabGroups).values(group).run()
+    this.groups.push(group)
     for (const tabId of input.tabIds) {
-      this.db.update(schema.tabs).set({ groupId: group.id }).where(eq(schema.tabs.id, tabId)).run()
+      const tab = this.tabRows.find((candidate) => candidate.id === tabId)
+      if (tab) tab.groupId = group.id
     }
-    this.notify()
+    this.commit()
     return group
   }
 
-  updateGroup(
-    groupId: string,
-    patch: Partial<Pick<TabGroup, 'title' | 'color' | 'collapsed'>>
-  ): void {
-    this.db.update(schema.tabGroups).set(patch).where(eq(schema.tabGroups.id, groupId)).run()
-    this.notify()
+  updateGroup(groupId: string, patch: Partial<Pick<TabGroup, 'title' | 'color' | 'collapsed'>>): void {
+    const group = this.groups.find((candidate) => candidate.id === groupId)
+    if (!group) return
+    Object.assign(group, stripUndefined(patch))
+    this.commit()
   }
 
-  /** Returns the ids of tabs that should be closed by the caller, if any. */
+  /** Returns the ids of tabs the caller should close, if any. */
   deleteGroup(groupId: string, closeTabs: boolean): string[] {
-    const members = this.listTabs().filter((tab) => tab.groupId === groupId)
-    // The FK is ON DELETE SET NULL, so ungrouping happens for free when we keep
-    // the tabs; we only need explicit ids when the caller is closing them.
-    this.db.delete(schema.tabGroups).where(eq(schema.tabGroups.id, groupId)).run()
-    this.notify()
-    return closeTabs ? members.map((tab) => tab.id) : []
+    const members = this.tabRows.filter((tab) => tab.groupId === groupId).map((tab) => tab.id)
+    replaceInPlace(this.groups, this.groups.filter((group) => group.id !== groupId))
+    // Ungroup rather than orphan when the tabs are being kept.
+    for (const tab of this.tabRows) if (tab.groupId === groupId) tab.groupId = null
+    this.commit()
+    return closeTabs ? members : []
   }
 
   /* ---------------------------------------------------------------- tabs */
 
   listTabs(): Tab[] {
-    return this.db
-      .select()
-      .from(schema.tabs)
-      .orderBy(asc(schema.tabs.order))
-      .all()
+    return [...this.tabRows]
+      .sort((a, b) => a.order - b.order)
       .map((row) => {
         const runtime = this.getRuntime(row.id)
         return {
@@ -307,20 +377,13 @@ export class StateStore {
     groupId?: string | null
     index?: number
   }): Tab {
-    const siblings = this.listTabs().filter((tab) => tab.workspaceId === input.workspaceId)
+    const siblings = this.tabRows.filter((tab) => tab.workspaceId === input.workspaceId)
     const order = input.index ?? siblings.length
-    // Make room at the insertion point.
     for (const sibling of siblings) {
-      if (sibling.order >= order) {
-        this.db
-          .update(schema.tabs)
-          .set({ order: sibling.order + 1 })
-          .where(eq(schema.tabs.id, sibling.id))
-          .run()
-      }
+      if (sibling.order >= order) sibling.order += 1
     }
 
-    const row = {
+    const row: TabRow = {
       id: randomUUID(),
       workspaceId: input.workspaceId,
       groupId: input.groupId ?? null,
@@ -333,9 +396,9 @@ export class StateStore {
       inAiContext: false,
       scrollY: 0
     }
-    this.db.insert(schema.tabs).values(row).run()
+    this.tabRows.push(row)
     this.runtime.set(row.id, { ...DEFAULT_RUNTIME })
-    this.notify()
+    this.commit()
     return this.getTab(row.id)!
   }
 
@@ -343,59 +406,45 @@ export class StateStore {
     const tab = this.getTab(tabId)
     if (!tab) return
 
-    this.db
-      .insert(schema.closedTabs)
-      .values({
-        id: randomUUID(),
-        workspaceId: tab.workspaceId,
-        url: tab.url,
-        title: tab.title,
-        faviconUrl: tab.faviconUrl,
-        groupId: tab.groupId,
-        order: tab.order,
-        closedAt: Date.now()
-      })
-      .run()
-    this.trimClosedTabs()
+    this.closedTabs.unshift({
+      id: randomUUID(),
+      workspaceId: tab.workspaceId,
+      url: tab.url,
+      title: tab.title,
+      faviconUrl: tab.faviconUrl,
+      groupId: tab.groupId,
+      order: tab.order,
+      closedAt: Date.now()
+    })
+    if (this.closedTabs.length > CLOSED_TAB_LIMIT) this.closedTabs.length = CLOSED_TAB_LIMIT
 
-    this.db.delete(schema.tabs).where(eq(schema.tabs.id, tabId)).run()
+    replaceInPlace(this.tabRows, this.tabRows.filter((row) => row.id !== tabId))
     this.runtime.delete(tabId)
     this.reindexWorkspace(tab.workspaceId)
 
     const activeTabs = this.getActiveTabMap()
     if (activeTabs[tab.workspaceId] === tabId) {
-      const remaining = this.listTabs()
-        .filter((candidate) => candidate.workspaceId === tab.workspaceId)
+      const remaining = this.tabRows
+        .filter((row) => row.workspaceId === tab.workspaceId)
         .sort((a, b) => a.order - b.order)
-      // Focus the neighbour that took this tab's slot, else the last tab.
+      // Focus whichever tab took this one's slot, else the last one.
       const successor = remaining[Math.min(tab.order, remaining.length - 1)]
       activeTabs[tab.workspaceId] = successor?.id ?? null
       this.setSetting(SETTING_ACTIVE_TABS, activeTabs)
     }
-    this.notify()
-  }
-
-  private trimClosedTabs(): void {
-    const rows = this.db
-      .select({ id: schema.closedTabs.id })
-      .from(schema.closedTabs)
-      .orderBy(desc(schema.closedTabs.closedAt))
-      .all()
-    for (const row of rows.slice(CLOSED_TAB_LIMIT)) {
-      this.db.delete(schema.closedTabs).where(eq(schema.closedTabs.id, row.id)).run()
-    }
+    this.commit()
   }
 
   popClosedTab(): { workspaceId: string; url: string; groupId: string | null; order: number } | null {
-    const row = this.db
-      .select()
-      .from(schema.closedTabs)
-      .orderBy(desc(schema.closedTabs.closedAt))
-      .limit(1)
-      .get()
-    if (!row) return null
-    this.db.delete(schema.closedTabs).where(eq(schema.closedTabs.id, row.id)).run()
-    return { workspaceId: row.workspaceId, url: row.url, groupId: row.groupId, order: row.order }
+    const entry = this.closedTabs.shift()
+    if (!entry) return null
+    this.commit()
+    return {
+      workspaceId: entry.workspaceId,
+      url: entry.url,
+      groupId: entry.groupId,
+      order: entry.order
+    }
   }
 
   updateTab(
@@ -404,21 +453,27 @@ export class StateStore {
       scrollY?: number
     }
   ): void {
-    this.db.update(schema.tabs).set(patch).where(eq(schema.tabs.id, tabId)).run()
-    this.notify()
+    const row = this.tabRows.find((candidate) => candidate.id === tabId)
+    if (!row) return
+    Object.assign(row, stripUndefined(patch))
+    this.commit()
   }
 
   touchTab(tabId: string): void {
-    this.db
-      .update(schema.tabs)
-      .set({ lastActiveAt: Date.now() })
-      .where(eq(schema.tabs.id, tabId))
-      .run()
+    const row = this.tabRows.find((candidate) => candidate.id === tabId)
+    if (!row) return
+    row.lastActiveAt = Date.now()
+    this.store.touch()
   }
 
   /**
    * Moves a tab to an index within its workspace, optionally changing group or
-   * workspace. Pinned tabs are kept ahead of unpinned ones by the reindex pass.
+   * workspace.
+   *
+   * `toIndex` is the slot the tab should occupy *after* being removed from its
+   * current position, so a forward move has to sort past the tab currently
+   * there and a backward move has to sort in front of it. `reindexWorkspace`
+   * then collapses the fractional key back to whole numbers.
    */
   moveTab(input: {
     tabId: string
@@ -426,59 +481,46 @@ export class StateStore {
     groupId?: string | null
     workspaceId?: string
   }): void {
-    const tab = this.getTab(input.tabId)
-    if (!tab) return
-    const targetWorkspace = input.workspaceId ?? tab.workspaceId
+    const row = this.tabRows.find((candidate) => candidate.id === input.tabId)
+    if (!row) return
 
-    // `toIndex` is the slot the tab should occupy *after* it has been removed
-    // from its current position. Comparing against the existing orders, that
-    // means a forward move has to sort past the tab currently in that slot,
-    // while a backward move has to sort in front of it.
-    const siblings = this.listTabs()
+    const previousWorkspace = row.workspaceId
+    const targetWorkspace = input.workspaceId ?? previousWorkspace
+
+    const siblings = this.tabRows
       .filter((candidate) => candidate.workspaceId === targetWorkspace)
       .sort((a, b) => a.order - b.order)
     const currentIndex = siblings.findIndex((candidate) => candidate.id === input.tabId)
     const movingForward = currentIndex !== -1 && input.toIndex >= currentIndex
-    const sortKey = movingForward ? input.toIndex + 0.5 : input.toIndex - 0.5
 
-    const patch: Record<string, unknown> = { order: sortKey }
-    if (input.groupId !== undefined) patch.groupId = input.groupId
-    if (input.workspaceId !== undefined) patch.workspaceId = input.workspaceId
-    this.db.update(schema.tabs).set(patch).where(eq(schema.tabs.id, input.tabId)).run()
+    row.order = movingForward ? input.toIndex + 0.5 : input.toIndex - 0.5
+    if (input.groupId !== undefined) row.groupId = input.groupId
+    if (input.workspaceId !== undefined) row.workspaceId = input.workspaceId
 
     this.reindexWorkspace(targetWorkspace)
-    if (targetWorkspace !== tab.workspaceId) this.reindexWorkspace(tab.workspaceId)
-    this.notify()
+    if (targetWorkspace !== previousWorkspace) this.reindexWorkspace(previousWorkspace)
+    this.commit()
   }
 
-  /**
-   * Collapses fractional and duplicate orders back to 0..n-1 with pinned tabs
-   * first. `moveTab` relies on this: it writes `index - 0.5` so the moved tab
-   * sorts into the gap, then this pass renumbers everything.
-   */
+  /** Renumbers a workspace to 0..n-1 with pinned tabs first. */
   private reindexWorkspace(workspaceId: string): void {
-    const members = this.db
-      .select()
-      .from(schema.tabs)
-      .where(eq(schema.tabs.workspaceId, workspaceId))
-      .all()
+    this.tabRows
+      .filter((row) => row.workspaceId === workspaceId)
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
         return a.order - b.order
       })
-    members.forEach((row, index) => {
-      if (row.order !== index) {
-        this.db.update(schema.tabs).set({ order: index }).where(eq(schema.tabs.id, row.id)).run()
-      }
-    })
+      .forEach((row, index) => {
+        row.order = index
+      })
   }
 
   setPinned(tabId: string, pinned: boolean): void {
-    const tab = this.getTab(tabId)
-    if (!tab) return
-    this.db.update(schema.tabs).set({ pinned }).where(eq(schema.tabs.id, tabId)).run()
-    this.reindexWorkspace(tab.workspaceId)
-    this.notify()
+    const row = this.tabRows.find((candidate) => candidate.id === tabId)
+    if (!row) return
+    row.pinned = pinned
+    this.reindexWorkspace(row.workspaceId)
+    this.commit()
   }
 
   getActiveTabMap(): Record<string, string | null> {
@@ -494,36 +536,17 @@ export class StateStore {
     map[workspaceId] = tabId
     this.setSetting(SETTING_ACTIVE_TABS, map)
     if (tabId) this.touchTab(tabId)
-    this.notify()
+    this.commit()
   }
 
   /* ---------------------------------------------------------- bookmarks */
 
   listBookmarks(): Bookmark[] {
-    return this.db
-      .select()
-      .from(schema.bookmarks)
-      .orderBy(asc(schema.bookmarks.order))
-      .all()
-      .map((row) => ({
-        id: row.id,
-        folderId: row.folderId,
-        url: row.url,
-        title: row.title,
-        faviconUrl: row.faviconUrl,
-        tags: row.tags ?? [],
-        note: row.note,
-        order: row.order,
-        createdAt: row.createdAt
-      }))
+    return [...this.bookmarkRows].sort((a, b) => a.order - b.order)
   }
 
   listBookmarkFolders(): BookmarkFolder[] {
-    return this.db
-      .select()
-      .from(schema.bookmarkFolders)
-      .orderBy(asc(schema.bookmarkFolders.order))
-      .all()
+    return [...this.folderRows].sort((a, b) => a.order - b.order)
   }
 
   createBookmark(input: {
@@ -542,11 +565,11 @@ export class StateStore {
       faviconUrl: input.faviconUrl,
       tags: input.tags,
       note: input.note,
-      order: this.listBookmarks().length,
+      order: this.bookmarkRows.length,
       createdAt: Date.now()
     }
-    this.db.insert(schema.bookmarks).values(bookmark).run()
-    this.notify()
+    this.bookmarkRows.push(bookmark)
+    this.commit()
     return bookmark
   }
 
@@ -554,13 +577,15 @@ export class StateStore {
     bookmarkId: string,
     patch: Partial<Pick<Bookmark, 'title' | 'note' | 'tags' | 'folderId'>>
   ): void {
-    this.db.update(schema.bookmarks).set(patch).where(eq(schema.bookmarks.id, bookmarkId)).run()
-    this.notify()
+    const bookmark = this.bookmarkRows.find((candidate) => candidate.id === bookmarkId)
+    if (!bookmark) return
+    Object.assign(bookmark, stripUndefined(patch))
+    this.commit()
   }
 
   deleteBookmark(bookmarkId: string): void {
-    this.db.delete(schema.bookmarks).where(eq(schema.bookmarks.id, bookmarkId)).run()
-    this.notify()
+    replaceInPlace(this.bookmarkRows, this.bookmarkRows.filter((b) => b.id !== bookmarkId))
+    this.commit()
   }
 
   createBookmarkFolder(name: string, parentId: string | null): BookmarkFolder {
@@ -568,52 +593,178 @@ export class StateStore {
       id: randomUUID(),
       parentId,
       name,
-      order: this.listBookmarkFolders().length
+      order: this.folderRows.length
     }
-    this.db.insert(schema.bookmarkFolders).values(folder).run()
-    this.notify()
+    this.folderRows.push(folder)
+    this.commit()
     return folder
   }
 
   deleteBookmarkFolder(folderId: string): void {
-    this.db.delete(schema.bookmarkFolders).where(eq(schema.bookmarkFolders.id, folderId)).run()
-    this.notify()
+    replaceInPlace(this.folderRows, this.folderRows.filter((f) => f.id !== folderId))
+    // Children of a deleted folder move to the root rather than vanishing.
+    for (const folder of this.folderRows) if (folder.parentId === folderId) folder.parentId = null
+    for (const bookmark of this.bookmarkRows) {
+      if (bookmark.folderId === folderId) bookmark.folderId = null
+    }
+    this.commit()
+  }
+
+  /* ------------------------------------------------------------ history */
+
+  listHistory(): HistoryEntry[] {
+    // Reverse before sorting so that entries recorded in the same millisecond
+    // (fast redirects, restored sessions) still come out newest-first: the sort
+    // is stable, so equal timestamps keep this reversed insertion order.
+    return [...this.historyRows].reverse().sort((a, b) => b.visitedAt - a.visitedAt)
+  }
+
+  /**
+   * Records a visit.
+   *
+   * Revisiting an URL bumps the existing entry rather than appending, so the
+   * history panel shows places rather than a raw event log -- and so the list
+   * stays small enough to hold in memory.
+   */
+  recordVisit(input: { url: string; title: string; faviconUrl: string | null }): void {
+    if (!/^https?:\/\//i.test(input.url)) return
+
+    const existing = this.historyRows.find((entry) => entry.url === input.url)
+    if (existing) {
+      existing.visitedAt = Date.now()
+      existing.visitCount += 1
+      if (input.title) existing.title = input.title
+      if (input.faviconUrl) existing.faviconUrl = input.faviconUrl
+    } else {
+      this.historyRows.push({
+        id: randomUUID(),
+        url: input.url,
+        title: input.title,
+        faviconUrl: input.faviconUrl,
+        visitedAt: Date.now(),
+        visitCount: 1
+      })
+      if (this.historyRows.length > HISTORY_LIMIT) {
+        replaceInPlace(this.historyRows, this.listHistory().slice(0, HISTORY_LIMIT))
+      }
+    }
+    this.commit()
+  }
+
+  /**
+   * Fills in a title or favicon that arrived after the navigation did, without
+   * counting it as another visit. Page titles almost always land late, so
+   * treating them as visits would inflate every count.
+   */
+  annotateHistory(url: string, patch: { title?: string; faviconUrl?: string | null }): void {
+    const entry = this.historyRows.find((candidate) => candidate.url === url)
+    if (!entry) return
+    if (patch.title) entry.title = patch.title
+    if (patch.faviconUrl) entry.faviconUrl = patch.faviconUrl
+    this.store.touch()
+  }
+
+  searchHistory(query: string, limit = 100): HistoryEntry[] {
+    const needle = query.trim().toLowerCase()
+    const all = this.listHistory()
+    if (!needle) return all.slice(0, limit)
+    return all
+      .filter(
+        (entry) =>
+          entry.title.toLowerCase().includes(needle) || entry.url.toLowerCase().includes(needle)
+      )
+      .slice(0, limit)
+  }
+
+  deleteHistoryEntry(entryId: string): void {
+    replaceInPlace(this.historyRows, this.historyRows.filter((entry) => entry.id !== entryId))
+    this.commit()
+  }
+
+  clearHistory(sinceMs: number | null): void {
+    if (sinceMs === null) replaceInPlace(this.historyRows, [])
+    else replaceInPlace(this.historyRows, this.historyRows.filter((e) => e.visitedAt < sinceMs))
+    this.commit()
+  }
+
+  /* ---------------------------------------------------------- downloads */
+
+  listDownloads(): DownloadItem[] {
+    return [...this.downloadRows].sort((a, b) => b.startedAt - a.startedAt)
+  }
+
+  upsertDownload(item: DownloadItem): void {
+    const existing = this.downloadRows.findIndex((candidate) => candidate.id === item.id)
+    if (existing === -1) this.downloadRows.unshift(item)
+    else this.downloadRows[existing] = item
+
+    if (this.downloadRows.length > DOWNLOAD_LIMIT) this.downloadRows.length = DOWNLOAD_LIMIT
+    this.commit()
+  }
+
+  updateDownload(
+    id: string,
+    patch: Partial<Pick<DownloadItem, 'state' | 'receivedBytes' | 'totalBytes' | 'completedAt'>>
+  ): void {
+    const item = this.downloadRows.find((candidate) => candidate.id === id)
+    if (!item) return
+    Object.assign(item, stripUndefined(patch))
+    this.commit()
+  }
+
+  removeDownload(id: string): void {
+    replaceInPlace(this.downloadRows, this.downloadRows.filter((item) => item.id !== id))
+    this.commit()
+  }
+
+  clearFinishedDownloads(): void {
+    const finished: DownloadState[] = ['completed', 'cancelled', 'interrupted']
+    replaceInPlace(this.downloadRows, this.downloadRows.filter((i) => !finished.includes(i.state)))
+    this.commit()
   }
 
   /* ----------------------------------------------------------- settings */
 
   getAllSettings(): Record<string, unknown> {
-    const rows = this.db.select().from(schema.settings).all()
-    return Object.fromEntries(rows.map((row) => [row.key, row.value]))
+    return { ...this.store.data.settings }
   }
 
   getSetting<T>(key: string, fallback: T): T {
-    const row = this.db.select().from(schema.settings).where(eq(schema.settings.key, key)).get()
-    return row === undefined ? fallback : (row.value as T)
+    const value = this.store.data.settings[key]
+    return value === undefined ? fallback : (value as T)
   }
 
   setSetting(key: string, value: unknown): void {
-    this.db
-      .insert(schema.settings)
-      .values({ key, value })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value } })
-      .run()
+    this.store.data.settings[key] = value
+    this.store.touch()
   }
 
   /* -------------------------------------------------------------- usage */
 
   recordUsage(record: Omit<UsageRecord, 'id' | 'createdAt'>): void {
-    this.db
-      .insert(schema.usageRecords)
-      .values({ ...record, id: randomUUID(), createdAt: Date.now() })
-      .run()
+    this.usageRows.push({ ...record, id: randomUUID(), createdAt: Date.now() })
+    this.store.touch()
   }
 
   listUsage(sinceMs?: number): UsageRecord[] {
-    const query = this.db.select().from(schema.usageRecords)
-    const rows = sinceMs
-      ? query.where(gte(schema.usageRecords.createdAt, sinceMs)).all()
-      : query.all()
-    return rows.sort((a, b) => b.createdAt - a.createdAt)
+    return this.usageRows
+      .filter((record) => (sinceMs === undefined ? true : record.createdAt >= sinceMs))
+      .sort((a, b) => b.createdAt - a.createdAt)
   }
+}
+
+/** Replaces an array's contents without breaking the store's reference to it. */
+function replaceInPlace<T>(target: T[], next: T[]): void {
+  target.length = 0
+  target.push(...next)
+}
+
+/**
+ * Drops `undefined` values so an optional patch field never overwrites a real
+ * one with nothing.
+ */
+function stripUndefined<T extends object>(patch: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined)
+  ) as Partial<T>
 }

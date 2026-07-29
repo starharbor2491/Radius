@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LayoutSchema } from './layout'
 
 /** Every persisted entity uses a UUID string id. */
 export const IdSchema = z.string().min(1)
@@ -33,6 +34,22 @@ export const WorkspaceSchema = z.object({
   order: z.number().int(),
   /** Theme preset id this workspace pins to, or null to follow the global theme. */
   themeId: z.string().nullable(),
+  /**
+   * A partial token document merged over whichever theme is in use while this
+   * workspace is active -- any subset of the theme shape, not just the accent.
+   * A workspace can be denser, or lighter, or drop the blur, and carries only
+   * the tokens it actually changes so it inherits every later edit to the base.
+   *
+   * Defaulted rather than required, so a state document written before this
+   * field existed still parses.
+   */
+  themeOverride: z.record(z.string(), z.unknown()).nullable().default(null),
+  /**
+   * Where this workspace's panels are docked. Prefaulted, so a workspace
+   * persisted before the layout editor existed resolves to the arrangement it
+   * already had rather than failing to parse.
+   */
+  layout: LayoutSchema,
   createdAt: z.number().int()
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
@@ -91,6 +108,59 @@ export const BookmarkSchema = z.object({
   createdAt: z.number().int()
 })
 export type Bookmark = z.infer<typeof BookmarkSchema>
+
+/* ------------------------------------------------------------------ *
+ * History
+ * ------------------------------------------------------------------ */
+
+export const HistoryEntrySchema = z.object({
+  id: IdSchema,
+  url: z.string(),
+  title: z.string(),
+  faviconUrl: z.string().nullable(),
+  /** Most recent visit. Revisiting an URL updates this rather than adding a row. */
+  visitedAt: z.number().int(),
+  visitCount: z.number().int()
+})
+export type HistoryEntry = z.infer<typeof HistoryEntrySchema>
+
+/* ------------------------------------------------------------------ *
+ * Downloads
+ * ------------------------------------------------------------------ */
+
+export const DownloadStateSchema = z.enum([
+  'progressing',
+  'paused',
+  'completed',
+  'cancelled',
+  'interrupted'
+])
+export type DownloadState = z.infer<typeof DownloadStateSchema>
+
+export const DownloadItemSchema = z.object({
+  id: IdSchema,
+  url: z.string(),
+  filename: z.string(),
+  savePath: z.string(),
+  state: DownloadStateSchema,
+  receivedBytes: z.number().int(),
+  /** Zero when the server sends no content-length. */
+  totalBytes: z.number().int(),
+  startedAt: z.number().int(),
+  completedAt: z.number().int().nullable()
+})
+export type DownloadItem = z.infer<typeof DownloadItemSchema>
+
+/* ------------------------------------------------------------------ *
+ * Find in page
+ * ------------------------------------------------------------------ */
+
+export const FindResultSchema = z.object({
+  tabId: IdSchema,
+  activeMatchOrdinal: z.number().int(),
+  matches: z.number().int()
+})
+export type FindResult = z.infer<typeof FindResultSchema>
 
 /* ------------------------------------------------------------------ *
  * AI providers
@@ -210,7 +280,21 @@ export type TokenUsage = z.infer<typeof TokenUsageSchema>
 export const AiStreamEventSchema = z.discriminatedUnion('type', [
   z.object({ runId: z.string(), type: z.literal('delta'), text: z.string() }),
   z.object({ runId: z.string(), type: z.literal('done'), usage: TokenUsageSchema.nullable() }),
-  z.object({ runId: z.string(), type: z.literal('error'), message: z.string() })
+  z.object({ runId: z.string(), type: z.literal('error'), message: z.string() }),
+  /**
+   * Something the user should know that is not the answer and not a failure --
+   * a fallback provider taking over, or a budget warning. Non-terminal: a run
+   * that emits a notice still ends with exactly one `done` or `error`.
+   */
+  z.object({ runId: z.string(), type: z.literal('notice'), message: z.string() }),
+  /**
+   * A reasoning-model's visible thinking, where the provider streams it.
+   *
+   * Kept a separate event rather than folded into `delta` because it is not the
+   * answer: it must not be shown as the reply, must not be fed back as assistant
+   * turn content, and the agent loop has to ignore it when parsing an action.
+   */
+  z.object({ runId: z.string(), type: z.literal('reasoning'), text: z.string() })
 ])
 export type AiStreamEvent = z.infer<typeof AiStreamEventSchema>
 
@@ -253,6 +337,9 @@ export const AppStateSchema = z.object({
   activeTabIdByWorkspace: z.record(z.string(), IdSchema.nullable()),
   bookmarks: z.array(BookmarkSchema),
   bookmarkFolders: z.array(BookmarkFolderSchema),
+  /** Most recent first, capped -- the full log is not shipped to the renderer. */
+  history: z.array(HistoryEntrySchema),
+  downloads: z.array(DownloadItemSchema),
   providers: z.array(ProviderStatusSchema),
   settings: z.record(z.string(), z.unknown())
 })

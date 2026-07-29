@@ -68,6 +68,15 @@ app.whenReady().then(async () => {
   // Give React a few frames to mount and the theme effect to run.
   await new Promise((resolve) => setTimeout(resolve, 1500))
 
+  // Open a panel if asked, so a screenshot can show more than the default view.
+  const panel = process.argv.find((arg) => arg.startsWith('--panel='))
+  if (panel) {
+    await view.webContents.executeJavaScript(
+      `document.querySelector('[aria-label="${panel.slice(8)}"]')?.click(); true`
+    )
+    await new Promise((resolve) => setTimeout(resolve, 900))
+  }
+
   const probe = await view.webContents.executeJavaScript(`(() => {
     const root = document.documentElement
     const read = (name) => getComputedStyle(root).getPropertyValue(name).trim()

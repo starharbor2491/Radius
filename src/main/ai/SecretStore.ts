@@ -1,7 +1,5 @@
 import { safeStorage } from 'electron'
-import { eq } from 'drizzle-orm'
-import type { Db } from '../db'
-import { schema } from '../db'
+import type { JsonStore } from '../store/JsonStore'
 
 /**
  * API keys, encrypted at rest with the OS keychain via Electron's safeStorage.
@@ -11,7 +9,7 @@ import { schema } from '../db'
  * that a key exists (`has`) and never what it is.
  */
 export class SecretStore {
-  constructor(private readonly db: Db) {}
+  constructor(private readonly store: JsonStore) {}
 
   /**
    * False when the platform has no usable keychain. On Linux this happens with
@@ -25,7 +23,8 @@ export class SecretStore {
 
   /** Name of the backing keychain, surfaced in Settings so the user can see it. */
   backend(): string {
-    if (process.platform !== 'linux') return process.platform === 'darwin' ? 'keychain' : 'dpapi'
+    if (process.platform === 'darwin') return 'keychain'
+    if (process.platform === 'win32') return 'dpapi'
     try {
       return safeStorage.getSelectedStorageBackend()
     } catch {
@@ -41,22 +40,23 @@ export class SecretStore {
       )
     }
     const ciphertext = safeStorage.encryptString(plaintext).toString('base64')
-    this.db
-      .insert(schema.secrets)
-      .values({ key, ciphertext, updatedAt: Date.now() })
-      .onConflictDoUpdate({
-        target: schema.secrets.key,
-        set: { ciphertext, updatedAt: Date.now() }
-      })
-      .run()
+    const existing = this.store.data.secrets.find((secret) => secret.key === key)
+    if (existing) {
+      existing.ciphertext = ciphertext
+      existing.updatedAt = Date.now()
+    } else {
+      this.store.data.secrets.push({ key, ciphertext, updatedAt: Date.now() })
+    }
+    this.store.touch()
+    // A key is worth an immediate write; losing it to a crash is user-visible.
+    this.store.flush()
   }
 
   get(key: string): string | null {
-    const row = this.db.select().from(schema.secrets).where(eq(schema.secrets.key, key)).get()
-    if (!row) return null
-    if (!this.isAvailable()) return null
+    const record = this.store.data.secrets.find((secret) => secret.key === key)
+    if (!record || !this.isAvailable()) return null
     try {
-      return safeStorage.decryptString(Buffer.from(row.ciphertext, 'base64'))
+      return safeStorage.decryptString(Buffer.from(record.ciphertext, 'base64'))
     } catch {
       // A key encrypted under a different OS profile is unreadable, not fatal.
       return null
@@ -64,11 +64,15 @@ export class SecretStore {
   }
 
   has(key: string): boolean {
-    return this.db.select().from(schema.secrets).where(eq(schema.secrets.key, key)).get() !== undefined
+    return this.store.data.secrets.some((secret) => secret.key === key)
   }
 
   delete(key: string): void {
-    this.db.delete(schema.secrets).where(eq(schema.secrets.key, key)).run()
+    const secrets = this.store.data.secrets.filter((secret) => secret.key !== key)
+    this.store.data.secrets.length = 0
+    this.store.data.secrets.push(...secrets)
+    this.store.touch()
+    this.store.flush()
   }
 
   static keyFor(providerId: string): string {

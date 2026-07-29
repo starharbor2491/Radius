@@ -1,22 +1,25 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { migrate } from '@main/db'
-import * as schema from '@main/db/schema'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { JsonStore } from '@main/store/JsonStore'
 import { StateStore } from '@main/state/StateStore'
 
 /**
- * StateStore against a real in-memory SQLite file. Exercising the actual
- * queries (rather than a mock) is the point: the ordering rules live half in
- * TypeScript and half in the SQL, and only a real database catches when those
- * two disagree.
+ * StateStore against a real JsonStore backed by a temp directory. Exercising
+ * the actual persistence path rather than a mock is the point -- the round trip
+ * through disk is what catches a mutation that never reached the document.
  */
+let directory: string
+
 function makeStore(): StateStore {
-  const sqlite = new Database(':memory:')
-  sqlite.pragma('foreign_keys = ON')
-  migrate(sqlite)
-  return new StateStore(drizzle(sqlite, { schema }))
+  directory = mkdtempSync(join(tmpdir(), 'radius-test-'))
+  return new StateStore(new JsonStore(join(directory, 'state.json')))
 }
+
+afterEach(() => {
+  if (directory) rmSync(directory, { recursive: true, force: true })
+})
 
 let store: StateStore
 let workspaceId: string

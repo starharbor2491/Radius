@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import type { Tab, TabGroup } from '@shared/types'
 import { TAB_GROUP_COLORS } from '@shared/types'
@@ -6,6 +6,7 @@ import { displayHost } from '@shared/url'
 import { buildStrip, useActiveTab, useWorkspaceGroups, useWorkspaceTabs } from '../store/useAppStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Spinner } from '../ui/primitives'
 
 /** One draggable line in the strip, flattened from the nested group rendering. */
@@ -144,7 +145,7 @@ export function TabStrip(): JSX.Element {
 
   return (
     <>
-      <div className="rx-tabs" ref={listRef} onScroll={() => setMenu(null)}>
+      <div className="rx-tabs" data-radius-part="tab-strip" ref={listRef} onScroll={() => setMenu(null)}>
         <AnimatePresence initial={false}>
           {sections.map((section) => {
             if (section.kind === 'tab' && section.tab) {
@@ -224,11 +225,27 @@ function TabItem({
 }: TabItemProps): JSX.Element {
   const { spring, when } = useMotionTokens()
 
+  /*
+   * A favicon that will not load falls back to the host initial through state,
+   * never by taking the node out of the DOM.
+   *
+   * This used to be `onError={(event) => event.currentTarget.remove()}`, which
+   * detaches a node React still believes it owns. The next render that replaced
+   * the image -- the spinner going up on the *following* navigation -- called
+   * `removeChild` on a node whose parent was already null, threw
+   * `NotFoundError`, and unmounted the entire chrome. Two navigations in one
+   * tab with an unloadable favicon was enough; `npm run smoke:app` only ever
+   * navigated once, so nothing caught it.
+   */
+  const [faviconFailed, setFaviconFailed] = useState(false)
+  useEffect(() => setFaviconFailed(false), [tab.faviconUrl])
+
   return (
     <motion.div
       ref={(node) => register(tab.id, node)}
       layout={when(true, false)}
       className="rx-tab"
+      data-radius-part="tab"
       data-active={active ? 'true' : 'false'}
       data-suspended={tab.suspended ? 'true' : 'false'}
       data-dragging={dragging ? 'true' : 'false'}
@@ -255,8 +272,8 @@ function TabItem({
       <span className="rx-tab-favicon" style={groupColorVar ? { color: groupColorVar } : undefined}>
         {tab.loading ? (
           <Spinner />
-        ) : tab.faviconUrl ? (
-          <img src={tab.faviconUrl} alt="" onError={(event) => event.currentTarget.remove()} />
+        ) : tab.faviconUrl && !faviconFailed ? (
+          <img src={tab.faviconUrl} alt="" onError={() => setFaviconFailed(true)} />
         ) : (
           <span>{(displayHost(tab.url)[0] ?? '·').toUpperCase()}</span>
         )}
@@ -264,8 +281,16 @@ function TabItem({
 
       <span className="rx-tab-title">{tab.title || displayHost(tab.url) || 'New tab'}</span>
 
-      {tab.pinned ? <span className="rx-tab-pin">●</span> : null}
-      {tab.inAiContext ? <span className="rx-tab-pin" title="In AI context">✦</span> : null}
+      {tab.pinned ? (
+        <span className="rx-tab-pin">
+          <Icon name="pin" size={12} />
+        </span>
+      ) : null}
+      {tab.inAiContext ? (
+        <span className="rx-tab-pin" title="In AI context">
+          <Icon name="sparkle" size={12} />
+        </span>
+      ) : null}
 
       <button
         className="rx-tab-close"
@@ -277,7 +302,7 @@ function TabItem({
           send('tabs:close', { tabId: tab.id })
         }}
       >
-        ✕
+        <Icon name="close" size={12} />
       </button>
     </motion.div>
   )
@@ -301,7 +326,9 @@ function GroupHeader({ group, count }: { group: TabGroup; count: number }): JSX.
         if (next) send('groups:update', { groupId: group.id, color: next })
       }}
     >
-      <span className="rx-group-caret">▾</span>
+      <span className="rx-group-caret">
+        <Icon name="chevron-down" size={14} />
+      </span>
       <span className="rx-tab-title">{group.title}</span>
       <span className="rx-faint">{count}</span>
     </div>

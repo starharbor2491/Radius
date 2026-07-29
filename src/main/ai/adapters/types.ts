@@ -18,6 +18,12 @@ export interface DiscoverParams {
 /** One increment of a streamed reply. Usage arrives on its own part, at the end. */
 export interface StreamPart {
   text?: string
+  /**
+   * Chain-of-thought, where the provider exposes it separately from the answer.
+   * Kept on its own channel rather than folded into `text` so the UI can show
+   * it collapsed -- reasoning is context for the answer, not the answer.
+   */
+  reasoning?: string
   usage?: TokenUsage
 }
 

@@ -14,30 +14,63 @@ are implemented. See [ROADMAP.md](ROADMAP.md) for what is done and what is next.
 
 - **A real browser.** `BaseWindow` plus one `WebContentsView` per tab, with tab
   groups, workspaces, bookmarks, session restore and idle-tab suspension.
-- **Every provider, in three tiers.** Hand-written adapters for Anthropic,
-  OpenAI and Google; a generic OpenAI-compatible adapter covering Ollama,
-  LM Studio, vLLM and most hosted vendors; and JSON *provider manifests* for
-  APIs that fit no standard shape.
+- **Every provider, from a list.** A built-in directory of ~30 providers —
+  OpenRouter, DeepSeek, Moonshot, DeepInfra, Groq, Together, Fireworks,
+  Cerebras, Databricks, Azure, Ollama and the rest — each with its endpoint
+  already filled in. Pick a name, paste a key. Anything not listed works too,
+  via an OpenAI-compatible base URL or a JSON manifest.
   See [ARCHITECTURE.md](ARCHITECTURE.md#ai-provider-layer).
+- **An assistant that can use the browser.** Give it a task and it drives the
+  page with a real mouse and keyboard — and its cursor is drawn *on the page*,
+  labelled, so you can watch every move and stop it at any point.
 - **A token engine.** One JSON document describes every colour, blur, radius,
   duration and spring in the app, resolving to CSS custom properties at runtime.
   Drag a slider in the Theme Studio and the whole chrome repaints.
-- **Local-first, BYOK.** All state lives in one SQLite file in your user data
+- **The rest of a browser.** History with search, a downloads manager, find in
+  page, per-tab zoom, and a command palette that reaches all of it.
+- **Local-first, BYOK.** All state lives in one JSON file in your user data
   directory. API keys are encrypted with the OS keychain through Electron's
   `safeStorage` and never cross an IPC boundary. There is no server component.
 
-## Getting started
+## Install on macOS
+
+Paste this into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/starharbor2491/Radius/claude/ai-productivity-browser-plan-fuijdl/scripts/install-mac.sh | bash
+```
+
+Once this branch is merged, the shorter form works instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/starharbor2491/Radius/main/scripts/install-mac.sh | bash
+```
+
+It installs `Radius.app` into your Applications folder and opens it. If a build
+has been published for your Mac it downloads that; otherwise it builds from
+source, which takes a few minutes and needs nothing installed beforehand — even
+Node is fetched to a temporary folder and thrown away afterwards.
+
+Requires macOS 12 or newer. It only asks for your password if your Applications
+folder is not writable by your account.
+
+Radius is **not signed with a paid Apple Developer identity**, so it is ad-hoc
+signed instead. The installer clears the quarantine flag so it opens normally;
+if macOS still objects, right-click the app in Applications and choose Open.
+
+To uninstall: drag Radius out of Applications, and delete
+`~/Library/Application Support/Radius` to remove your data.
+
+## Running from source
 
 ```bash
 npm install
-npm run rebuild     # build better-sqlite3 against Electron's ABI
 npm run dev
 ```
 
-`npm run rebuild` is required once after install, and again after any Electron
-upgrade: `better-sqlite3` is a native module and ships prebuilds for Node, not
-for Electron. It needs a working toolchain (python3, make, a C++ compiler) and
-network access to `electronjs.org` for the matching headers.
+That is the whole setup. Radius has no native modules, so there is no compile
+step, no build toolchain to install, and nothing to rebuild when Electron
+updates -- `npm install` downloads packages and `npm run dev` opens the browser.
 
 ## Scripts
 
@@ -46,10 +79,30 @@ network access to `electronjs.org` for the matching headers.
 | `npm run dev` | Run in development, with HMR for the chrome |
 | `npm run build` | Typecheck, then build main, preload and renderer |
 | `npm test` | Unit tests (vitest) |
-| `npm run smoke` | Boot the built chrome in Electron and assert it renders |
+| `npm run smoke` | Boot the chrome in Electron and assert it renders |
+| `npm run smoke:app` | Boot the whole app, navigate to a page, assert it works |
+| `npm run test:install` | Exercise the macOS installer against stubbed tools |
 | `npm run typecheck` | Typecheck the Node and web projects |
-| `npm run rebuild` | Rebuild native modules against Electron |
-| `npm run package` | Build and package with electron-builder |
+| `npm run package:mac` | Build a macOS `.app`, `.dmg` and `.zip` |
+| `npm run package` | Build and package for the current platform |
+
+## Letting the assistant drive
+
+Open the agent panel (⌘⇧A), describe what you want done on the current page,
+and press Start. It reads what is on screen, moves a visible cursor, clicks and
+types like a person would, and reports each step.
+
+It is bounded on purpose: the cursor is always visible while it works, it moves
+in followable steps rather than teleporting, runs are capped, Stop cancels
+mid-action, and it is instructed to refuse credentials, payment details and
+checkout flows.
+
+## AI quick actions
+
+The assistant panel (⌘J) carries one-tap actions over whatever you are reading:
+summarize, extract key facts, explain the selection, translate, simplify, and
+"what is missing?". Each runs through the same provider and streaming path as
+ordinary chat, and each is also a ⌘K command.
 
 ## Configuring a provider
 
@@ -90,10 +143,16 @@ someone sent you" close to zero.
 | ⌘J | Toggle the AI panel |
 | ⌘B | Toggle the sidebar |
 | ⌘⇧N | New workspace |
+| ⌘F | Find in page |
+| ⌘Y | History |
+| ⌘⇧J | Downloads |
+| ⌘+ / ⌘- / ⌘0 | Zoom in, out, reset |
+| ⌘⇧A | Let the assistant drive the page |
 | ⌘⇧, | Theme Studio |
 
-Every command is remappable-by-design: the menu bar, the keyboard and the
-palette all dispatch through one registry in `src/renderer/lib/commands.ts`.
+Every one of these is remappable in Settings — press the key you want and it is
+saved. The menu bar, the keyboard and the palette all dispatch through one
+registry in `src/renderer/lib/commands.ts`, so a command is defined once.
 
 ## Licence
 

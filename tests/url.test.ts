@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { displayHost, parseOmniboxInput, resolveSearchEngine, SEARCH_ENGINES } from '@shared/url'
+import {
+  displayHost,
+  formatUrlForDisplay,
+  parseOmniboxInput,
+  resolveSearchEngine,
+  SEARCH_ENGINES
+} from '@shared/url'
 
 const google = resolveSearchEngine('google')
 
@@ -70,5 +76,55 @@ describe('displayHost', () => {
 
   it('returns the input unchanged when it is not a URL', () => {
     expect(displayHost('not a url')).toBe('not a url')
+  })
+})
+
+describe('formatUrlForDisplay', () => {
+  it('splits a URL into the part that identifies the site and the part that does not', () => {
+    const result = formatUrlForDisplay('https://www.example.com/docs/page?q=1#top')
+    expect(result).toEqual({
+      security: 'secure',
+      prefix: 'https://www.',
+      host: 'example.com',
+      rest: '/docs/page?q=1#top'
+    })
+  })
+
+  it('reports plain http as plain rather than reassuring', () => {
+    expect(formatUrlForDisplay('http://example.com/')?.security).toBe('plain')
+    expect(formatUrlForDisplay('https://example.com/')?.security).toBe('secure')
+  })
+
+  it('keeps a non-default port on the host, since it is part of the identity', () => {
+    expect(formatUrlForDisplay('http://127.0.0.1:3000/app')?.host).toBe('127.0.0.1:3000')
+  })
+
+  it('omits a bare root path so the common case shows nothing after the host', () => {
+    expect(formatUrlForDisplay('https://example.com/')?.rest).toBe('')
+  })
+
+  it('does not claim a host for schemes that have none', () => {
+    const about = formatUrlForDisplay('about:blank')
+    expect(about?.security).toBe('internal')
+    expect(about?.host).toBe('about')
+    expect(formatUrlForDisplay('file:///tmp/x.html')?.security).toBe('internal')
+  })
+
+  it('returns null for anything unparseable, rather than guessing', () => {
+    expect(formatUrlForDisplay('not a url')).toBeNull()
+    expect(formatUrlForDisplay('')).toBeNull()
+  })
+
+  it('never drops a character: the parts reassemble into the address', () => {
+    for (const url of [
+      'https://www.example.com/a/b?c=d#e',
+      'http://sub.example.co.uk:8080/x',
+      'https://example.com/'
+    ]) {
+      const parts = formatUrlForDisplay(url)!
+      expect(`${parts.prefix}${parts.host}${parts.rest}`.replace(/\/$/, '')).toBe(
+        url.replace(/\/$/, '')
+      )
+    }
   })
 })

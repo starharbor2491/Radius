@@ -13,6 +13,16 @@ import type { RadiusWindow } from '../window/RadiusWindow'
 import type { ProviderRegistry } from '../ai/ProviderRegistry'
 import type { ThemeService } from '../theme/ThemeService'
 import type { PageContextService } from '../page/PageContextService'
+import type { DownloadService } from '../downloads/DownloadService'
+import type { AgentController } from '../agent/AgentController'
+import { DEFAULT_KEYBINDINGS } from '@shared/keybindings'
+import {
+  defaultLayout,
+  movePanel,
+  resizeRegion,
+  setActive,
+  type Layout
+} from '@shared/layout'
 import { withContext } from '../ai/context'
 
 export interface AppServices {
@@ -22,6 +32,8 @@ export interface AppServices {
   providers: ProviderRegistry
   theme: ThemeService
   pageContext: PageContextService
+  downloads: DownloadService
+  agent: AgentController
 }
 
 const OK = { ok: true } as const
@@ -36,7 +48,26 @@ type HandlerMap = {
 }
 
 export function registerIpcHandlers(services: AppServices): void {
-  const { state, tabs, window, providers, theme, pageContext } = services
+  const { state, tabs, window, providers, theme, pageContext, downloads, agent } = services
+
+  /** The agent needs the live view plus its zoom, to convert coordinates. */
+  const agentTarget = (tabId: string) => ({
+    contents: window.getView(tabId)?.webContents,
+    zoom: state.getRuntime(tabId).zoom
+  })
+
+  /**
+   * Applies a pure layout move to a workspace's document.
+   *
+   * Main reads the current layout, applies the function from `@shared/layout`,
+   * and stores the result -- so the same code the unit tests exercise is the
+   * code that runs, and the renderer's copy always arrives as a snapshot of
+   * what was actually persisted.
+   */
+  const editLayout = (workspaceId: string, edit: (layout: Layout) => Layout): typeof OK => {
+    state.setWorkspaceLayout(workspaceId, edit(state.getWorkspaceLayout(workspaceId)))
+    return OK
+  }
 
   const handlers: HandlerMap = {
     'state:get': () => buildState(services),
@@ -120,6 +151,16 @@ export function registerIpcHandlers(services: AppServices): void {
       return OK
     },
 
+    /* ----------------------------------------------------------- layout */
+    'layout:movePanel': ({ workspaceId, panel, region, index }) =>
+      editLayout(workspaceId, (layout) => movePanel(layout, panel, region, index)),
+    'layout:setActive': ({ workspaceId, region, panel }) =>
+      editLayout(workspaceId, (layout) => setActive(layout, region, panel)),
+    'layout:resizeRegion': ({ workspaceId, region, size }) =>
+      editLayout(workspaceId, (layout) => resizeRegion(layout, region, size)),
+    'layout:set': ({ workspaceId, layout }) => editLayout(workspaceId, () => layout),
+    'layout:reset': ({ workspaceId }) => editLayout(workspaceId, () => defaultLayout()),
+
     /* -------------------------------------------------------- bookmarks */
     'bookmarks:create': (payload) => state.createBookmark(payload),
     'bookmarks:update': ({ bookmarkId, ...patch }) => {
@@ -163,6 +204,86 @@ export function registerIpcHandlers(services: AppServices): void {
       return OK
     },
 
+    /* ------------------------------------------------------------ history */
+    'history:search': ({ query, limit }) => state.searchHistory(query, limit),
+    'history:delete': ({ entryId }) => {
+      state.deleteHistoryEntry(entryId)
+      return OK
+    },
+    'history:clear': ({ sinceMs }) => {
+      state.clearHistory(sinceMs)
+      return OK
+    },
+
+    /* ---------------------------------------------------------- downloads */
+    'downloads:open': async ({ id }) => {
+      await downloads.open(id)
+      return OK
+    },
+    'downloads:reveal': ({ id }) => {
+      downloads.reveal(id)
+      return OK
+    },
+    'downloads:cancel': ({ id }) => {
+      downloads.cancel(id)
+      return OK
+    },
+    'downloads:remove': ({ id }) => {
+      downloads.remove(id)
+      return OK
+    },
+    'downloads:clearFinished': () => {
+      state.clearFinishedDownloads()
+      return OK
+    },
+
+    /* --------------------------------------------------------------- find */
+    'find:start': (payload) => {
+      tabs.find(payload)
+      return OK
+    },
+    'find:stop': ({ tabId, keepSelection }) => {
+      tabs.stopFind(tabId, keepSelection)
+      return OK
+    },
+
+    /* --------------------------------------------------------------- zoom */
+    'zoom:set': ({ tabId, factor }) => ({ factor: tabs.setZoom(tabId, factor) }),
+    'zoom:step': ({ tabId, direction }) => ({ factor: tabs.stepZoom(tabId, direction) }),
+
+    /* -------------------------------------------------------------- agent */
+    'agent:begin': ({ tabId, label, accent }) => {
+      agent.begin(agentTarget(tabId), label, accent)
+      return OK
+    },
+    'agent:describe': ({ tabId }) => agent.describe(agentTarget(tabId)),
+    'agent:act': ({ tabId, action }) => agent.perform(agentTarget(tabId), action),
+    'agent:stop': ({ tabId }) => {
+      agent.stop(agentTarget(tabId))
+      return OK
+    },
+
+    /* -------------------------------------------------------- keybindings */
+    'keybindings:get': () => ({
+      ...DEFAULT_KEYBINDINGS,
+      ...state.getSetting<Record<string, string>>('keybindings', {})
+    }),
+    'keybindings:set': ({ bindings, preset }) => {
+      state.setSetting('keybindings', bindings)
+      if (preset) state.setSetting('keybindingPreset', preset)
+      state.notify()
+      return OK
+    },
+    'keybindings:getPreset': () => ({
+      preset: state.getSetting<string | null>('keybindingPreset', null)
+    }),
+    // Deliberately does not touch `keybindings`: see the contract.
+    'keybindings:setPreset': ({ preset }) => {
+      state.setSetting('keybindingPreset', preset)
+      state.notify()
+      return OK
+    },
+
     /* ------------------------------------------------------------ theme */
     'theme:get': () => ({ theme: theme.get(), presets: theme.presets() }),
     'theme:set': ({ theme: next }) => {
@@ -171,10 +292,7 @@ export function registerIpcHandlers(services: AppServices): void {
       return OK
     },
     'theme:importFile': () => theme.importFromFile(),
-    'theme:exportFile': async ({ theme: next }) => {
-      await theme.exportToFile(next)
-      return OK
-    },
+    'theme:exportFile': ({ theme: next }) => theme.exportToFile(next),
 
     /* --------------------------------------------------------- settings */
     'settings:get': () => state.getAllSettings(),
@@ -252,7 +370,23 @@ export function registerIpcHandlers(services: AppServices): void {
       providers.cancel(runId)
       return OK
     },
-    'ai:usage': ({ sinceMs }) => state.listUsage(sinceMs)
+    'ai:usage': ({ sinceMs }) => state.listUsage(sinceMs),
+
+    /* ------------------------------------------------ routing & budget */
+    'ai:getRouting': () => providers.routing(),
+    'ai:setRouting': ({ config }) => {
+      providers.setRouting(config)
+      // Both documents live in settings, so the snapshot carries them to every
+      // panel that renders them -- no second subscription.
+      state.notify()
+      return OK
+    },
+    'ai:getBudget': () => providers.budget(),
+    'ai:setBudget': ({ config }) => {
+      providers.setBudget(config)
+      state.notify()
+      return OK
+    }
   }
 
   for (const channel of IPC_CHANNELS) {

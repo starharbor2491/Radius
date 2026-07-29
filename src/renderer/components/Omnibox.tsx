@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { displayHost, parseOmniboxInput, resolveSearchEngine } from '@shared/url'
+import {
+  displayHost,
+  formatUrlForDisplay,
+  parseOmniboxInput,
+  resolveSearchEngine
+} from '@shared/url'
 import { useActiveTab, useAppStore, useWorkspaceTabs } from '../store/useAppStore'
 import { useUiStore } from '../store/useUiStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 
 interface Suggestion {
   kind: 'go' | 'search' | 'tab' | 'bookmark'
@@ -109,11 +115,50 @@ export function Omnibox(): JSX.Element {
     setOmniboxFocused(false)
   }
 
+  /*
+   * What is shown when nobody is typing. A raw URL in a text field is a field
+   * of undifferentiated grey that truncates from the wrong end -- the host, the
+   * only part that says who you are talking to, disappears first. This puts the
+   * host in full text at a readable weight and lets the path be the thing that
+   * gets cut.
+   */
+  const display = omniboxFocused ? null : formatUrlForDisplay(draft)
+
   return (
-    <div className="rx-omnibox">
+    <div className="rx-omnibox" data-radius-part="omnibox">
+      {display ? (
+        <button
+          type="button"
+          className="rx-omnibox-display"
+          data-security={display.security}
+          title={draft}
+          onClick={() => {
+            inputRef.current?.focus()
+            inputRef.current?.select()
+          }}
+        >
+          <Icon
+            name={
+              display.security === 'secure'
+                ? 'lock'
+                : display.security === 'plain'
+                  ? 'lock-open'
+                  : 'page'
+            }
+            size={13}
+          />
+          <span className="rx-omnibox-url">
+            {display.prefix ? <span className="rx-omnibox-dim">{display.prefix}</span> : null}
+            <span className="rx-omnibox-host">{display.host}</span>
+            {display.rest ? <span className="rx-omnibox-dim">{display.rest}</span> : null}
+          </span>
+        </button>
+      ) : null}
+
       <motion.input
         ref={inputRef}
         className="rx-omnibox-input"
+        data-hidden={display ? 'true' : 'false'}
         value={draft}
         spellCheck={false}
         placeholder={`Search ${engine.name} or enter an address`}

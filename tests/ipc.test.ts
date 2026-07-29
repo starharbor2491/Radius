@@ -56,7 +56,7 @@ describe('ipc events', () => {
     // src/preload/chrome.ts hardcodes this list because a sandboxed preload
     // cannot import zod. If they drift, events silently stop arriving.
     expect([...IPC_EVENT_NAMES].sort()).toEqual(
-      ['ai:stream', 'command:invoke', 'state:changed'].sort()
+      ['ai:stream', 'command:invoke', 'find:result', 'state:changed'].sort()
     )
   })
 

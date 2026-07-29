@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { parseTheme, resolveThemeVars, themeToCss, THEME_SCHEMA_VERSION } from '@shared/theme'
+import {
+  applyThemeOverride,
+  auditThemeContrast,
+  failingContrast,
+  flattenThemeOverride,
+  mergeThemeDocuments,
+  parseTheme,
+  parseThemeDocument,
+  resolveThemeOverride,
+  resolveThemeVars,
+  sanitizeUserCss,
+  themeOverrideDiff,
+  themeToCss,
+  THEME_SCHEMA_VERSION,
+  withoutThemeOverridePath
+} from '@shared/theme'
 import { getPreset, THEME_PRESETS } from '@shared/theme-presets'
 
 describe('parseTheme', () => {
@@ -46,7 +61,9 @@ describe('resolveThemeVars', () => {
       '--rx-text-0',
       '--rx-duration-fast',
       '--rx-spring-tabDrag-stiffness',
-      '--rx-color-group-violet'
+      '--rx-color-group-violet',
+      '--rx-color-scrim',
+      '--rx-opacity-disabled'
     ]) {
       expect(vars[name], name).toBeDefined()
     }
@@ -77,6 +94,13 @@ describe('resolveThemeVars', () => {
     expect(Number.parseInt(slow['--rx-duration-fast']!, 10)).toBe(
       Number.parseInt(base['--rx-duration-fast']!, 10) * 2
     )
+  })
+
+  it('lets a light theme dim with its own scrim rather than black', () => {
+    // 28% black is a whisper over a dark window and a bruise over a light one.
+    const light = getPreset('daylight')!
+    expect(light.colors.scrim).not.toBe(parseTheme({}).colors.scrim)
+    expect(resolveThemeVars(light)['--rx-color-scrim']).toBe(light.colors.scrim)
   })
 
   it('scales spacing with density', () => {
@@ -114,5 +138,284 @@ describe('presets', () => {
 
   it('ships a preset with no blur for low-power machines', () => {
     expect(getPreset('carbon')!.glass.chrome.mode).toBe('solid')
+  })
+
+  it('is a set of different designs rather than one design recoloured', () => {
+    // Six recolours of one theme would all resolve to the same geometry and
+    // motion. These are the axes that make a preset feel like another browser.
+    const distinct = (values: unknown[]): number => new Set(values.map(String)).size
+    expect(distinct(THEME_PRESETS.map((p) => p.geometry.density))).toBe(3)
+    expect(distinct(THEME_PRESETS.map((p) => p.geometry.radiusMd))).toBeGreaterThanOrEqual(5)
+    expect(distinct(THEME_PRESETS.map((p) => p.glass.chrome.mode))).toBeGreaterThanOrEqual(3)
+    expect(distinct(THEME_PRESETS.map((p) => p.typography.fontSans))).toBeGreaterThanOrEqual(2)
+    expect(distinct(THEME_PRESETS.map((p) => p.motion.scale))).toBeGreaterThanOrEqual(6)
+    expect(THEME_PRESETS.filter((p) => p.colors.scheme === 'light').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('describes each preset without inventing an author', () => {
+    for (const preset of THEME_PRESETS) {
+      expect(preset.description.length, preset.id).toBeGreaterThan(10)
+    }
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * Reading a document a human wrote
+ * ------------------------------------------------------------------ */
+
+describe('parseThemeDocument', () => {
+  it('accepts a three-line file that sets two tokens', () => {
+    const result = parseThemeDocument(
+      JSON.parse('{\n  "name": "Two tokens",\n  "colors": { "accent": "oklch(0.8 0.2 30)" }\n}')
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.theme.colors.accent).toBe('oklch(0.8 0.2 30)')
+    expect(result.theme.glass.popover.blur).toBe(parseTheme({}).glass.popover.blur)
+    expect(result.theme.motion.springs.tabDrag.stiffness).toBeGreaterThan(0)
+  })
+
+  it('names the field that failed, not just "invalid"', () => {
+    const result = parseThemeDocument({ glass: { chrome: { blur: 5000 } } })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]!.path).toBe('glass.chrome.blur')
+    expect(result.issues[0]!.message.length).toBeGreaterThan(0)
+  })
+
+  it('reports every bad field, not only the first', () => {
+    const result = parseThemeDocument({
+      colors: { scheme: 'sepia' },
+      motion: { scale: -1 },
+      geometry: { pageInset: 900 }
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.issues.map((issue) => issue.path).sort()).toEqual([
+      'colors.scheme',
+      'geometry.pageInset',
+      'motion.scale'
+    ])
+  })
+
+  it('reports a wrong-typed token at its own path', () => {
+    const result = parseThemeDocument({ typography: { baseSize: 'large' } })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.issues[0]!.path).toBe('typography.baseSize')
+  })
+
+  it('explains a document that is not an object at all', () => {
+    for (const input of [null, 42, 'oklch(0.7 0.1 200)', ['colors']]) {
+      const result = parseThemeDocument(input)
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.issues[0]!.path).toBe('(document)')
+      expect(result.issues[0]!.message).toContain('expected a JSON object')
+    }
+  })
+
+  it('round-trips an exported theme', () => {
+    const exported = JSON.parse(JSON.stringify(getPreset('vapor')))
+    const result = parseThemeDocument(exported)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.theme).toEqual(getPreset('vapor'))
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * Partial documents: merging, diffing, workspace overrides
+ * ------------------------------------------------------------------ */
+
+describe('mergeThemeDocuments', () => {
+  it('merges nested objects key by key without mutating either side', () => {
+    const base = { colors: { accent: 'a', bg: 'b' }, motion: { scale: 1 } }
+    const patch = { colors: { accent: 'z' } }
+    const merged = mergeThemeDocuments(base, patch) as typeof base
+    expect(merged).toEqual({ colors: { accent: 'z', bg: 'b' }, motion: { scale: 1 } })
+    expect(base.colors.accent).toBe('a')
+    expect(patch).toEqual({ colors: { accent: 'z' } })
+  })
+
+  it('replaces scalars and skips undefined', () => {
+    expect(mergeThemeDocuments({ a: 1, b: 2 }, { a: 5, b: undefined })).toEqual({ a: 5, b: 2 })
+  })
+})
+
+describe('workspace overrides', () => {
+  const base = parseTheme({})
+
+  it('merges any subset of the document over the base theme', () => {
+    const merged = applyThemeOverride(base, {
+      colors: { accent: 'oklch(0.7 0.2 30)' },
+      geometry: { density: 'compact' },
+      glass: { chrome: { blur: 4 } }
+    })
+    expect(merged.colors.accent).toBe('oklch(0.7 0.2 30)')
+    expect(merged.geometry.density).toBe('compact')
+    expect(merged.glass.chrome.blur).toBe(4)
+    // Everything the override did not name still comes from the base.
+    expect(merged.glass.chrome.saturation).toBe(base.glass.chrome.saturation)
+    expect(merged.colors.bg).toBe(base.colors.bg)
+  })
+
+  it('leaves the base visible when the override is nonsense, and says why', () => {
+    const result = resolveThemeOverride(base, { motion: { scale: 99 } })
+    expect(result.theme).toEqual(base)
+    expect(result.issues[0]!.path).toBe('motion.scale')
+  })
+
+  it('treats an empty or absent override as no override', () => {
+    expect(resolveThemeOverride(base, {}).theme).toBe(base)
+    expect(resolveThemeOverride(base, null).theme).toBe(base)
+  })
+
+  it('stores only the difference from the base', () => {
+    const edited = parseTheme({ ...base, geometry: { ...base.geometry, density: 'comfortable' } })
+    expect(themeOverrideDiff(base, edited)).toEqual({ geometry: { density: 'comfortable' } })
+  })
+
+  it('drops a token from the diff once it matches the base again', () => {
+    const edited = { ...base, colors: { ...base.colors, accent: 'x' } }
+    const reverted = { ...edited, colors: { ...edited.colors, accent: base.colors.accent } }
+    expect(themeOverrideDiff(base, edited)).toEqual({ colors: { accent: 'x' } })
+    expect(themeOverrideDiff(base, reverted)).toEqual({})
+  })
+
+  it('lists what an override changes, one leaf per row', () => {
+    const leaves = flattenThemeOverride({
+      colors: { accent: 'x' },
+      glass: { chrome: { blur: 2, noise: 0 } }
+    })
+    expect(leaves).toEqual([
+      { path: 'colors.accent', value: 'x' },
+      { path: 'glass.chrome.blur', value: 2 },
+      { path: 'glass.chrome.noise', value: 0 }
+    ])
+  })
+
+  it('removes one token path and prunes the parent it emptied', () => {
+    const override = { colors: { accent: 'x' }, glass: { chrome: { blur: 2 } } }
+    expect(withoutThemeOverridePath(override, 'glass.chrome.blur')).toEqual({
+      colors: { accent: 'x' }
+    })
+    expect(withoutThemeOverridePath(override, 'colors.accent')).toEqual({
+      glass: { chrome: { blur: 2 } }
+    })
+    // Unknown paths are a no-op rather than a throw; the document is user data.
+    expect(withoutThemeOverridePath(override, 'nope.nothing')).toEqual(override)
+  })
+
+  it('composes over a pinned preset as easily as over the global theme', () => {
+    const pinned = getPreset('daylight')!
+    const merged = applyThemeOverride(pinned, { geometry: { density: 'compact' } })
+    expect(merged.colors.scheme).toBe('light')
+    expect(merged.geometry.density).toBe('compact')
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * User CSS
+ * ------------------------------------------------------------------ */
+
+describe('sanitizeUserCss', () => {
+  it('passes ordinary rules through untouched', () => {
+    const css = '[data-radius-part="tab"] { text-transform: uppercase; }'
+    expect(sanitizeUserCss(css)).toEqual({ css, warnings: [] })
+  })
+
+  it('removes @import and says so', () => {
+    const result = sanitizeUserCss('@import url("https://cdn.example/x.css");\n.rx-tab { color: red; }')
+    expect(result.css).not.toContain('@import')
+    expect(result.css).toContain('.rx-tab')
+    expect(result.warnings[0]).toContain('@import')
+  })
+
+  it('removes a remote url() but keeps a data: URI', () => {
+    const remote = sanitizeUserCss('.a { background: url(https://example.com/x.png); }')
+    expect(remote.css).not.toContain('example.com')
+    expect(remote.warnings).toHaveLength(1)
+
+    const inline = '.a { background: url(data:image/png;base64,AAAA); }'
+    expect(sanitizeUserCss(inline)).toEqual({ css: inline, warnings: [] })
+  })
+
+  it('removes the legacy script-in-CSS vectors', () => {
+    const result = sanitizeUserCss(
+      '.a { width: expression(alert(1)); -moz-binding: url(x.xml); behavior: url(#default#time2); }'
+    )
+    expect(result.css).not.toContain('expression(')
+    expect(result.css).not.toContain('-moz-binding')
+    expect(result.css).not.toContain('behavior:')
+    expect(result.warnings).toHaveLength(3)
+  })
+
+  it('never lets markup through, even though it is applied as text', () => {
+    const result = sanitizeUserCss('</style><script>alert(1)</script>')
+    expect(result.css).not.toContain('</style>')
+    expect(result.warnings).toHaveLength(1)
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * Contrast
+ * ------------------------------------------------------------------ */
+
+describe('auditThemeContrast', () => {
+  it('grades every pair the chrome actually renders', () => {
+    const findings = auditThemeContrast(parseTheme({}))
+    expect(findings.map((finding) => finding.id).sort()).toEqual([
+      'accent-surface',
+      'accent-text',
+      'faint-surface',
+      'muted-surface',
+      'text-bg',
+      'text-surface'
+    ])
+    for (const finding of findings) {
+      expect(finding.ratio, finding.id).not.toBeNull()
+      expect(finding.passes, `${finding.id} ${finding.ratio}`).toBe(true)
+    }
+  })
+
+  it('fails a pair that misses AA, and keeps the number', () => {
+    const theme = parseTheme({
+      colors: { text: 'oklch(0.55 0.02 265)', surface1: 'oklch(0.50 0.02 265)' }
+    })
+    const finding = auditThemeContrast(theme).find((entry) => entry.id === 'text-surface')!
+    expect(finding.passes).toBe(false)
+    expect(finding.grade).toBe('fail')
+    expect(finding.ratio).toBeLessThan(4.5)
+    expect(finding.minimum).toBe(4.5)
+    expect(finding.reason).toBe('body text')
+  })
+
+  it('holds hint text and non-text UI to 3:1 rather than 4.5:1', () => {
+    const findings = auditThemeContrast(parseTheme({}))
+    expect(findings.find((entry) => entry.id === 'faint-surface')!.minimum).toBe(3)
+    expect(findings.find((entry) => entry.id === 'accent-surface')!.minimum).toBe(3)
+  })
+
+  it('says a colour is unmeasurable rather than guessing at it', () => {
+    // Nothing corrects the value: a hex string is legal CSS and stays applied.
+    const theme = parseTheme({ colors: { text: '#ff0000' } })
+    const finding = auditThemeContrast(theme).find((entry) => entry.id === 'text-surface')!
+    expect(finding.ratio).toBeNull()
+    expect(finding.grade).toBeNull()
+    expect(finding.passes).toBe(false)
+  })
+
+  it('does not correct a failing pair', () => {
+    const theme = parseTheme({ colors: { text: 'oklch(0.30 0 0)', surface1: 'oklch(0.28 0 0)' } })
+    expect(theme.colors.text).toBe('oklch(0.30 0 0)')
+    expect(resolveThemeVars(theme)['--rx-color-text']).toBe('oklch(0.30 0 0)')
+  })
+
+  it('ships no preset that fails its own check', () => {
+    for (const preset of THEME_PRESETS) {
+      expect(failingContrast(preset).map((finding) => finding.id), preset.id).toEqual([])
+    }
   })
 })

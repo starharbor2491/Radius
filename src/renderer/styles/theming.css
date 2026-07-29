@@ -1,0 +1,540 @@
+/*
+ * Theming: the gallery, the studio's own controls, and the surfaces that report
+ * what the token engine knows -- contrast grades, import failures, the tokens a
+ * workspace overrides.
+ *
+ * See app.css for the no-literal-values rule: every value here reads a `--rx-*`
+ * custom property, including inside the gallery previews. That is not pedantry
+ * there -- a preview card re-declares the whole token set on itself, so a rule
+ * written with a literal would be the one thing in the preview that did not
+ * change when you hovered a different theme.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Scope switch
+ * ------------------------------------------------------------------ */
+
+.rx-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+}
+
+.rx-scope-switch {
+  display: flex;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-1);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-2);
+}
+
+.rx-scope-option {
+  flex: 1;
+  padding: var(--rx-space-2);
+  border: none;
+  border-radius: var(--rx-radius-sm);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
+  cursor: pointer;
+  transition:
+    background-color var(--rx-duration-fast) var(--rx-ease-standard),
+    color var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-scope-option:hover:not(:disabled) {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+}
+
+.rx-scope-option[data-active='true'] {
+  background: var(--rx-color-accent);
+  color: var(--rx-color-accent-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-scope-option:disabled {
+  opacity: var(--rx-opacity-disabled);
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ *
+ * Gallery
+ * ------------------------------------------------------------------ */
+
+.rx-gallery-head {
+  padding-right: var(--rx-space-1);
+}
+
+.rx-gallery-title {
+  padding-left: var(--rx-space-2);
+}
+
+.rx-gallery-revert {
+  gap: var(--rx-space-1);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-gallery-grid {
+  display: grid;
+  /* Two columns in a default-width panel, one when it is dragged narrow. */
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--rx-space-12) * 2.6), 1fr));
+  gap: var(--rx-space-2);
+}
+
+.rx-gallery-hint {
+  padding: 0 var(--rx-space-2);
+}
+
+.rx-theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text-muted);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--rx-duration-fast) var(--rx-ease-standard),
+    box-shadow var(--rx-duration-fast) var(--rx-ease-standard),
+    transform var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-theme-card:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+  border-color: var(--rx-color-border-strong);
+  box-shadow: var(--rx-elevation-2);
+  /* Scaled by the motion tokens, so "no motion" really means none. */
+  transform: translateY(calc(var(--rx-motion-enabled) * -1px));
+}
+
+.rx-theme-card[data-active='true'] {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-text);
+}
+
+.rx-theme-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  min-width: 0;
+}
+
+.rx-theme-card-name {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  color: var(--rx-color-text);
+  font-size: var(--rx-text-0);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-theme-card-note {
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+  line-height: var(--rx-line-height);
+  /* Cards in a row stay the same height whatever the description runs to. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ *
+ * Theme preview
+ *
+ * A second complete token scope. Everything below reads the properties the
+ * preview element itself declares, which is why the miniature retints, resizes
+ * and un-blurs with the theme it is previewing rather than with the app's.
+ * ------------------------------------------------------------------ */
+
+.rx-theme-preview {
+  display: flex;
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  overflow: hidden;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-1);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-bg);
+}
+
+.rx-theme-preview-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-1);
+  border: var(--rx-border-width) solid var(--rx-glass-chrome-border);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-glass-chrome-bg);
+  backdrop-filter: var(--rx-glass-chrome-backdrop);
+  -webkit-backdrop-filter: var(--rx-glass-chrome-backdrop);
+}
+
+.rx-theme-preview-chip {
+  width: var(--rx-space-2);
+  height: var(--rx-space-2);
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-text-faint);
+}
+
+.rx-theme-preview-chip[data-active='true'] {
+  background: var(--rx-color-accent);
+}
+
+.rx-theme-preview-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+}
+
+.rx-theme-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-1);
+  border: var(--rx-border-width) solid var(--rx-glass-chrome-border);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-glass-chrome-bg);
+  backdrop-filter: var(--rx-glass-chrome-backdrop);
+  -webkit-backdrop-filter: var(--rx-glass-chrome-backdrop);
+}
+
+.rx-theme-preview-tab {
+  width: var(--rx-space-4);
+  height: var(--rx-space-2);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
+}
+
+.rx-theme-preview-tab[data-active='true'] {
+  background: var(--rx-color-surface-3);
+}
+
+.rx-theme-preview-omnibox {
+  flex: 1;
+  height: var(--rx-space-2);
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-1);
+}
+
+.rx-theme-preview-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-2);
+  border-radius: var(--rx-page-radius);
+  background: var(--rx-color-surface-1);
+  box-shadow: var(--rx-elevation-1);
+}
+
+.rx-theme-preview-line {
+  width: 76%;
+  height: var(--rx-space-1);
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-text-muted);
+}
+
+.rx-theme-preview-line[data-short='true'] {
+  width: 48%;
+  background: var(--rx-color-text-faint);
+}
+
+.rx-theme-preview-button {
+  width: 38%;
+  height: var(--rx-space-3);
+  margin-top: var(--rx-space-1);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Contrast reporting
+ * ------------------------------------------------------------------ */
+
+.rx-contrast {
+  font-size: var(--rx-text-n1);
+  line-height: var(--rx-line-height);
+  align-items: flex-start;
+}
+
+.rx-contrast[data-state='ok'] {
+  color: var(--rx-color-text-faint);
+}
+
+.rx-contrast[data-state='unknown'] {
+  color: var(--rx-color-warning);
+}
+
+/*
+ * A failing pair is not decoration. It gets the danger colour and it keeps the
+ * number, because "fix your contrast" without the measurement is not actionable.
+ */
+.rx-contrast[data-state='fail'] {
+  color: var(--rx-color-danger);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-contrast-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  padding: 0 var(--rx-space-1);
+  border-radius: var(--rx-radius-sm);
+  font-size: var(--rx-text-n1);
+  color: var(--rx-color-danger);
+  background: color-mix(in oklch, var(--rx-color-danger) 14%, transparent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Issue lists: import failures, ignored overrides, stripped CSS
+ * ------------------------------------------------------------------ */
+
+.rx-issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-2);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-issue-list[data-state='fail'] {
+  color: var(--rx-color-danger);
+  border-color: color-mix(in oklch, var(--rx-color-danger) 40%, transparent);
+}
+
+.rx-issue-list[data-state='warn'] {
+  color: var(--rx-color-warning);
+  border-color: color-mix(in oklch, var(--rx-color-warning) 40%, transparent);
+}
+
+.rx-issue-list[data-state='ok'] {
+  color: var(--rx-color-success);
+  border-color: color-mix(in oklch, var(--rx-color-success) 40%, transparent);
+}
+
+.rx-issue {
+  font-size: var(--rx-text-n1);
+  line-height: var(--rx-line-height);
+  user-select: text;
+}
+
+.rx-issue code {
+  font-family: var(--rx-font-mono);
+  color: var(--rx-color-text);
+}
+
+.rx-path {
+  user-select: text;
+  word-break: break-all;
+}
+
+/* ------------------------------------------------------------------ *
+ * Workspace overrides
+ * ------------------------------------------------------------------ */
+
+.rx-override-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rx-override-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-1) var(--rx-space-2);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-override-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--rx-font-mono);
+  color: var(--rx-color-text);
+}
+
+.rx-override-value {
+  color: var(--rx-color-text-faint);
+  white-space: nowrap;
+}
+
+.rx-override-drop {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--rx-color-text-faint);
+  cursor: pointer;
+}
+
+.rx-override-drop:hover {
+  color: var(--rx-color-danger);
+}
+
+/* ------------------------------------------------------------------ *
+ * User CSS
+ * ------------------------------------------------------------------ */
+
+/*
+ * Wins over `.rx-textarea`'s own min-height: app.css imports this file at the
+ * top, so at equal specificity app.css would come last.
+ */
+textarea.rx-css-editor {
+  min-height: calc(var(--rx-space-12) * 2.5);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+  white-space: pre;
+  overflow: auto;
+}
+
+.rx-parts summary {
+  cursor: pointer;
+}
+
+.rx-parts-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-1);
+  padding-top: var(--rx-space-2);
+}
+
+.rx-part-name {
+  padding: 0 var(--rx-space-1);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-muted);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+  user-select: text;
+}
+
+/* ------------------------------------------------------------------ *
+ * Small shared bits the studio needs
+ * ------------------------------------------------------------------ */
+
+.rx-swatch {
+  width: var(--rx-space-5);
+  height: var(--rx-space-5);
+  border-radius: var(--rx-radius-sm);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+/* A label sitting on one line with its control rather than above it. */
+.rx-label-inline {
+  margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Colour rows and ramps
+ *
+ * Five colour tokens times lightness, chroma and hue is fifteen identical
+ * full-width tracks. The row is what you read; the ramps are what you open.
+ * ------------------------------------------------------------------ */
+
+.rx-color {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+}
+
+.rx-color-head {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  min-height: calc(28px * var(--rx-density));
+  padding: var(--rx-space-1) var(--rx-space-2);
+  border: var(--rx-border-width) solid transparent;
+  border-radius: var(--rx-radius-sm);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--rx-duration-fast) var(--rx-ease-standard),
+    color var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-color-head:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-color[data-open='true'] > .rx-color-head {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+/* A failing pair marks its own row, not just the note under it. */
+.rx-color[data-failing='true'] > .rx-color-head {
+  border-color: color-mix(in oklch, var(--rx-color-danger) 45%, transparent);
+}
+
+.rx-color-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rx-color-value {
+  color: var(--rx-color-text-faint);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-ramps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  padding: 0 var(--rx-space-2) var(--rx-space-1);
+}
+
+/* Label, track and value on one row -- the studio has more labels than content. */
+.rx-ramp {
+  display: grid;
+  grid-template-columns: calc(var(--rx-space-12) * 2.2) 1fr calc(var(--rx-space-12) * 0.9);
+  align-items: center;
+  gap: var(--rx-space-2);
+}
+
+.rx-ramp-label {
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rx-ramp-value {
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

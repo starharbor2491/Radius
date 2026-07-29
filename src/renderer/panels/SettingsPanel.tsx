@@ -1,9 +1,15 @@
-import { useState, type JSX } from 'react'
+import { useMemo, useState, type JSX } from 'react'
 import type { ProviderStatus } from '@shared/types'
 import { SEARCH_ENGINES } from '@shared/url'
 import { useAppStore } from '../store/useAppStore'
+import { useUiStore } from '../store/useUiStore'
 import { bridge, send } from '../lib/bridge'
 import { Button, Field } from '../ui/primitives'
+import { KeybindingsEditor } from './KeybindingsEditor'
+import { LayoutEditor } from './LayoutEditor'
+import { ProviderDirectory } from './ProviderDirectory'
+import { BudgetControls } from './BudgetControls'
+import { RoutingEditor } from './RoutingEditor'
 
 /**
  * Provider setup and browser behaviour.
@@ -14,6 +20,17 @@ import { Button, Field } from '../ui/primitives'
 export function SettingsPanel(): JSX.Element {
   const providers = useAppStore((store) => store.state.providers)
   const settings = useAppStore((store) => store.state.settings)
+  const setRightPanel = useUiStore((store) => store.setRightPanel)
+
+  const { ready, waiting } = useMemo(() => {
+    const configured = providers.filter(
+      (provider) => provider.hasKey || provider.models.length > 0 || provider.tier === 'manifest'
+    )
+    return {
+      ready: configured,
+      waiting: providers.filter((provider) => !configured.includes(provider))
+    }
+  }, [providers])
 
   return (
     <div className="rx-panel-scroll">
@@ -53,11 +70,54 @@ export function SettingsPanel(): JSX.Element {
       </section>
 
       <section>
+        <div className="rx-section-title">Layout</div>
+        <LayoutEditor />
+      </section>
+
+      <section>
+        <div className="rx-section-title">Keyboard</div>
+        <KeybindingsEditor />
+      </section>
+
+      <section>
+        <div className="rx-section-title">Spend budget</div>
+        <div className="rx-card">
+          <BudgetControls />
+          <Button variant="outline" onClick={() => setRightPanel('usage')}>
+            Open usage panel
+          </Button>
+        </div>
+      </section>
+
+      <section>
+        <div className="rx-section-title">Model routing</div>
+        <RoutingEditor />
+      </section>
+
+      <section>
         <div className="rx-section-title">AI providers</div>
-        {providers.map((provider) => (
+        {/*
+          Every reachable provider is seeded at first launch, so this list is
+          around thirty entries long. Rendering a full card -- key field, Test,
+          Discover, Remove -- for each would bury the two the user actually uses
+          in a wall of empty password inputs. Configured ones get the card; the
+          rest stay one click away in the directory below, which is searchable.
+        */}
+        {ready.length === 0 ? (
+          <div className="rx-card rx-faint">
+            No provider has a key yet. Pick one below and paste a key — Radius discovers its models
+            for you.
+          </div>
+        ) : null}
+        {ready.map((provider) => (
           <ProviderCard key={provider.id} provider={provider} />
         ))}
-        <AddProviderForms />
+        {waiting.length > 0 ? (
+          <div className="rx-faint" style={{ marginBottom: 'var(--rx-space-2)' }}>
+            {waiting.length} more provider{waiting.length === 1 ? '' : 's'} ready for a key.
+          </div>
+        ) : null}
+        <ProviderDirectory />
       </section>
     </div>
   )
@@ -164,110 +224,3 @@ function ProviderCard({ provider }: { provider: ProviderStatus }): JSX.Element {
     </div>
   )
 }
-
-/**
- * Tiers 2 and 3, exposed as forms.
- *
- * The OpenAI-compatible path is the one most people need -- it covers Ollama,
- * LM Studio, vLLM and most hosted vendors. The manifest path exists for APIs
- * that fit no standard shape at all.
- */
-function AddProviderForms(): JSX.Element {
-  const [label, setLabel] = useState('')
-  const [baseUrl, setBaseUrl] = useState('http://localhost:11434/v1')
-  const [manifestText, setManifestText] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [showManifest, setShowManifest] = useState(false)
-
-  return (
-    <div className="rx-card">
-      <strong>Add a provider</strong>
-
-      <Field label="Name">
-        <input
-          className="rx-input"
-          value={label}
-          placeholder="Ollama, vLLM, a hosted vendor…"
-          onChange={(event) => setLabel(event.target.value)}
-        />
-      </Field>
-
-      <Field label="OpenAI-compatible base URL">
-        <input className="rx-input" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-      </Field>
-
-      <div className="rx-row">
-        <Button
-          variant="primary"
-          disabled={!label.trim() || !baseUrl.trim()}
-          onClick={() => {
-            setError(null)
-            void bridge
-              .invoke('ai:addOpenAiCompatible', { label: label.trim(), baseUrl: baseUrl.trim(), models: [] })
-              .then((created) => bridge.invoke('ai:discoverModels', { providerId: created.id }))
-              .then(() => setLabel(''))
-              .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
-          }}
-        >
-          Add
-        </Button>
-        <Button variant="outline" onClick={() => setShowManifest((current) => !current)}>
-          {showManifest ? 'Hide' : 'Custom API (JSON manifest)'}
-        </Button>
-      </div>
-
-      {showManifest ? (
-        <Field label="Manifest">
-          <textarea
-            className="rx-textarea"
-            style={{ minHeight: 160, fontFamily: 'var(--rx-font-mono)' }}
-            value={manifestText}
-            placeholder={MANIFEST_EXAMPLE}
-            onChange={(event) => setManifestText(event.target.value)}
-          />
-          <Button
-            variant="primary"
-            disabled={!label.trim() || !manifestText.trim()}
-            onClick={() => {
-              setError(null)
-              try {
-                const manifest = JSON.parse(manifestText) as Record<string, unknown>
-                void bridge
-                  .invoke('ai:addManifestProvider', {
-                    label: label.trim(),
-                    // Validated against ProviderManifestSchema on the main side.
-                    manifest: manifest as never,
-                    models: []
-                  })
-                  .then(() => {
-                    setManifestText('')
-                    setLabel('')
-                  })
-                  .catch((cause: unknown) =>
-                    setError(cause instanceof Error ? cause.message : String(cause))
-                  )
-              } catch {
-                setError('That is not valid JSON.')
-              }
-            }}
-          >
-            Add custom provider
-          </Button>
-        </Field>
-      ) : null}
-
-      {error ? <span className="rx-danger">{error}</span> : null}
-    </div>
-  )
-}
-
-const MANIFEST_EXAMPLE = `{
-  "endpoint": "https://api.example.com/v1/chat",
-  "authStyle": "bearer",
-  "authKey": "Authorization",
-  "modelField": "model",
-  "messagesField": "messages",
-  "streamFormat": "sse",
-  "deltaPath": "choices.0.delta.content",
-  "textPath": "choices.0.message.content"
-}`

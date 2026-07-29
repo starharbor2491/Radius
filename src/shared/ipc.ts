@@ -5,6 +5,8 @@ import {
   BookmarkFolderSchema,
   BookmarkSchema,
   ChatMessageSchema,
+  FindResultSchema,
+  HistoryEntrySchema,
   IdSchema,
   ModelInfoSchema,
   PageContextSchema,
@@ -16,7 +18,11 @@ import {
   UsageRecordSchema,
   WorkspaceSchema
 } from './types'
-import { ThemeSchema } from './theme'
+import { ThemeImportResultSchema, ThemeOverrideSchema, ThemeSchema } from './theme'
+import { LayoutSchema, PanelIdSchema, RegionIdSchema } from './layout'
+import { AgentActionSchema, AgentPageMapSchema } from './agent'
+import { RoutingConfigSchema } from './routing'
+import { BudgetConfigSchema } from './budget'
 
 /**
  * The single source of truth for the main <-> renderer boundary.
@@ -117,12 +123,63 @@ export const ipcContract = {
       name: z.string().optional(),
       icon: z.string().optional(),
       accent: z.string().optional(),
-      themeId: z.string().nullable().optional()
+      themeId: z.string().nullable().optional(),
+      /**
+       * A partial token document merged over the theme while this workspace is
+       * active. `null` clears it; omitting it leaves it alone. Validated as
+       * loose JSON here and against the theme schema at merge time, so a
+       * workspace can override a token this build has never heard of without
+       * the channel rejecting it outright.
+       */
+      themeOverride: ThemeOverrideSchema.nullable().optional()
     }),
     response: Ok
   },
   'workspaces:delete': { request: z.object({ workspaceId: IdSchema }), response: Ok },
   'workspaces:reorder': { request: z.object({ orderedIds: z.array(IdSchema) }), response: Ok },
+
+  /* ------------------------------------------------------------ layout */
+  /**
+   * Panel docking, stored on the workspace.
+   *
+   * These are mutations like any other: main applies the pure move from
+   * `@shared/layout`, persists it, and pushes a fresh snapshot. The renderer
+   * never edits its mirror of the document -- a locally-applied move would
+   * reintroduce exactly the desync the snapshot design removes, and here it
+   * would show up as the page view sitting over a region that main has not been
+   * told about yet.
+   */
+  'layout:movePanel': {
+    request: z.object({
+      workspaceId: IdSchema,
+      panel: PanelIdSchema,
+      region: RegionIdSchema,
+      index: z.number().int().optional()
+    }),
+    response: Ok
+  },
+  'layout:setActive': {
+    request: z.object({
+      workspaceId: IdSchema,
+      region: RegionIdSchema,
+      panel: PanelIdSchema.nullable()
+    }),
+    response: Ok
+  },
+  'layout:resizeRegion': {
+    request: z.object({
+      workspaceId: IdSchema,
+      region: RegionIdSchema,
+      size: z.number()
+    }),
+    response: Ok
+  },
+  /** Replaces the whole document -- used by "apply preset" and by reset. */
+  'layout:set': {
+    request: z.object({ workspaceId: IdSchema, layout: LayoutSchema }),
+    response: Ok
+  },
+  'layout:reset': { request: z.object({ workspaceId: IdSchema }), response: Ok },
 
   /* ---------------------------------------------------------- bookmarks */
   'bookmarks:create': {
@@ -185,14 +242,117 @@ export const ipcContract = {
   'window:toggleMaximize': { request: Empty, response: Ok },
   'window:close': { request: Empty, response: Ok },
 
+  /* ------------------------------------------------------------ history */
+  'history:search': {
+    request: z.object({ query: z.string().default(''), limit: z.number().int().optional() }),
+    response: z.array(HistoryEntrySchema)
+  },
+  'history:delete': { request: z.object({ entryId: IdSchema }), response: Ok },
+  /** `sinceMs: null` clears everything; a timestamp clears only newer visits. */
+  'history:clear': { request: z.object({ sinceMs: z.number().int().nullable() }), response: Ok },
+
+  /* ---------------------------------------------------------- downloads */
+  'downloads:open': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:reveal': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:cancel': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:remove': { request: z.object({ id: IdSchema }), response: Ok },
+  'downloads:clearFinished': { request: Empty, response: Ok },
+
+  /* --------------------------------------------------------------- find */
+  /**
+   * Results arrive as `find:result` events, since a search updates as you type.
+   *
+   * `findNext` mirrors Electron and reads backwards from what you would guess:
+   * `true` means "begin a new find session" (use it for a new or edited query)
+   * and `false` means "advance within the existing session" (use it for
+   * next/previous). Sending `false` with no session open reports nothing at all.
+   */
+  'find:start': {
+    request: z.object({
+      tabId: IdSchema,
+      query: z.string(),
+      forward: z.boolean().default(true),
+      findNext: z.boolean().default(true),
+      matchCase: z.boolean().default(false)
+    }),
+    response: Ok
+  },
+  'find:stop': {
+    request: z.object({ tabId: IdSchema, keepSelection: z.boolean().default(false) }),
+    response: Ok
+  },
+
+  /* --------------------------------------------------------------- zoom */
+  'zoom:set': {
+    request: z.object({ tabId: IdSchema, factor: z.number().min(0.25).max(5) }),
+    response: z.object({ factor: z.number() })
+  },
+  'zoom:step': {
+    request: z.object({ tabId: IdSchema, direction: z.enum(['in', 'out', 'reset']) }),
+    response: z.object({ factor: z.number() })
+  },
+
+  /* -------------------------------------------------------------- agent */
+  /**
+   * The assistant drives the page with a real mouse and keyboard, and its
+   * cursor is drawn inside the page so the user can watch it work. `begin`
+   * shows the cursor, `stop` hides it and cancels anything in flight.
+   */
+  'agent:begin': {
+    request: z.object({ tabId: IdSchema, label: z.string().default('Assistant'), accent: z.string() }),
+    response: Ok
+  },
+  'agent:describe': { request: z.object({ tabId: IdSchema }), response: AgentPageMapSchema },
+  'agent:act': {
+    request: z.object({ tabId: IdSchema, action: AgentActionSchema }),
+    response: z.object({ ok: z.boolean(), detail: z.string(), finished: z.boolean().optional() })
+  },
+  'agent:stop': { request: z.object({ tabId: IdSchema }), response: Ok },
+
+  /* -------------------------------------------------------- keybindings */
+  /**
+   * A binding value is either one accelerator (`Mod+T`) or a space-separated
+   * chord (`g t`); the shape on the wire is the same either way, which is why
+   * chords needed no migration.
+   */
+  'keybindings:get': { request: Empty, response: z.record(z.string(), z.string()) },
+  'keybindings:set': {
+    request: z.object({
+      bindings: z.record(z.string(), z.string()),
+      /** Which preset set this map came from, when the write is an "apply". */
+      preset: z.string().optional()
+    }),
+    response: Ok
+  },
+  /** Which preset set the current map started life as, if it is known. */
+  'keybindings:getPreset': { request: Empty, response: z.object({ preset: z.string().nullable() }) },
+  /**
+   * Records provenance *only*. Naming the set a map came from must never
+   * rewrite the map, or a user's own edits would vanish the moment something
+   * recognised which preset they started from.
+   */
+  'keybindings:setPreset': { request: z.object({ preset: z.string() }), response: Ok },
+
   /* -------------------------------------------------------------- theme */
   'theme:get': {
     request: Empty,
     response: z.object({ theme: ThemeSchema, presets: z.array(ThemeSchema) })
   },
   'theme:set': { request: z.object({ theme: ThemeSchema }), response: Ok },
-  'theme:importFile': { request: Empty, response: ThemeSchema.nullable() },
-  'theme:exportFile': { request: z.object({ theme: ThemeSchema }), response: Ok },
+  /**
+   * Opens a file dialog and reads a `.radius-theme.json`.
+   *
+   * The result is a report rather than a theme-or-null, because "this file is
+   * invalid" is not a useful thing to tell someone editing JSON by hand. A
+   * failure names the token path and what was wrong with it; a file that parses
+   * comes back with the theme *and* the paths it actually set, so the studio
+   * can say how much of the document was really in the file.
+   */
+  'theme:importFile': { request: Empty, response: ThemeImportResultSchema },
+  'theme:exportFile': {
+    request: z.object({ theme: ThemeSchema }),
+    response: z.object({ saved: z.boolean(), path: z.string().nullable() })
+  },
 
   /* ----------------------------------------------------------- settings */
   'settings:get': { request: Empty, response: z.record(z.string(), z.unknown()) },
@@ -249,7 +409,19 @@ export const ipcContract = {
   'ai:usage': {
     request: z.object({ sinceMs: z.number().int().optional() }),
     response: z.array(UsageRecordSchema)
-  }
+  },
+
+  /* --------------------------------------------------- routing & budget */
+  /**
+   * Per-feature model routing. The config carries provider and model ids only:
+   * like everything else crossing this boundary it names credentials, never
+   * carries them.
+   */
+  'ai:getRouting': { request: Empty, response: RoutingConfigSchema },
+  'ai:setRouting': { request: z.object({ config: RoutingConfigSchema }), response: Ok },
+  /** Monthly spend cap over recorded usage. */
+  'ai:getBudget': { request: Empty, response: BudgetConfigSchema },
+  'ai:setBudget': { request: z.object({ config: BudgetConfigSchema }), response: Ok }
 } as const satisfies Record<string, { request: z.ZodType; response: z.ZodType }>
 
 export type IpcContract = typeof ipcContract
@@ -272,6 +444,8 @@ export const ipcEvents = {
   /** A fresh authoritative snapshot. Main owns the state; the renderer mirrors it. */
   'state:changed': AppStateSchema,
   'ai:stream': AiStreamEventSchema,
+  /** Match counts for the find bar, pushed as the query is refined. */
+  'find:result': FindResultSchema,
   /** A global shortcut or menu item fired a named command. */
   'command:invoke': z.object({ command: z.string() })
 } as const satisfies Record<string, z.ZodType>

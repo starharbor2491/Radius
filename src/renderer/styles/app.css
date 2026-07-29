@@ -6,6 +6,14 @@
  * comment -- that constraint is what makes the whole UI retheme at runtime.
  */
 
+/*
+ * Feature stylesheets. Split out so a feature's rules live next to nothing else,
+ * and so two people can work on two features without meeting in one file.
+ */
+@import './layout.css';
+@import './theming.css';
+@import './keybindings.css';
+
 *,
 *::before,
 *::after {
@@ -50,6 +58,39 @@ textarea {
   outline: 2px solid var(--rx-color-accent);
   outline-offset: 2px;
   border-radius: var(--rx-radius-sm);
+}
+
+/*
+ * Scrollbars, everywhere, once.
+ *
+ * A default Chromium scrollbar beside a themed glass panel is the loudest
+ * possible tell that the surface was assembled rather than designed. These are
+ * overlay-thin, appear against the content they scroll, and take their colour
+ * from the same border token as everything else.
+ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-border-strong);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rx-color-text-faint);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ------------------------------------------------------------------ *
@@ -124,6 +165,82 @@ textarea {
   display: flex;
   min-width: 0;
   height: 100%;
+  /* Flush against the window edge: only the inner edge is a real border. */
+  border-block: none;
+  border-inline-start: none;
+  border-radius: 0;
+}
+
+.rx-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  flex: none;
+  padding-inline: var(--rx-space-1);
+}
+
+/*
+ * The workspace name is a heading you can type into. It should not advertise
+ * that it is an input until you are in it -- a bordered field at the top of the
+ * sidebar reads as a search box and gets clicked as one.
+ */
+.rx-workspace-name {
+  flex: 1;
+  min-width: 0;
+  height: calc(28px * var(--rx-density));
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--rx-color-text);
+  font-size: var(--rx-text-1);
+  font-weight: var(--rx-weight-bold);
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.rx-workspace-name:hover,
+.rx-workspace-name:focus {
+  background: var(--rx-color-surface-2);
+  border-radius: var(--rx-radius-sm);
+  padding-inline: var(--rx-space-2);
+}
+
+.rx-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+  flex: none;
+  padding-top: var(--rx-space-2);
+  border-top: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+/* A disclosure header: full-width target, chevron, label, count. */
+.rx-disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  height: calc(28px * var(--rx-density));
+  padding: 0 var(--rx-space-2);
+  border: none;
+  border-radius: var(--rx-radius-md);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.rx-disclosure:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-disclosure-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rx-rail {
@@ -186,6 +303,28 @@ textarea {
 
 .rx-toolbar > * {
   -webkit-app-region: no-drag;
+}
+
+/*
+ * Related controls sit tight together; the gap between groups is what does the
+ * separating. No dividers -- twelve icons need structure, not more lines.
+ */
+.rx-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+
+/* An unread/in-progress marker on an icon button. */
+.rx-badge-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
 }
 
 /*
@@ -256,12 +395,80 @@ textarea {
   color: var(--rx-color-danger);
 }
 
+/*
+ * Disabled has to read as disabled at a glance. A solid accent button at 40%
+ * opacity still looks like a filled, pressable button; dropping the fill is
+ * what actually communicates "not now".
+ */
 .rx-button:disabled {
-  opacity: 0.4;
+  opacity: var(--rx-opacity-disabled);
   cursor: not-allowed;
 }
 
+.rx-button:disabled[data-variant='primary'] {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-faint);
+  font-weight: var(--rx-weight-normal);
+}
+
+.rx-button:disabled:hover {
+  background: transparent;
+  color: var(--rx-color-text-muted);
+}
+
+.rx-button:disabled[data-variant='primary']:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-faint);
+}
+
+/*
+ * An empty panel is the first thing a new user sees, so it says what to do in
+ * body text rather than whispering it in the faintest colour on the palette.
+ */
+.rx-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-4) 0;
+  max-width: 44ch;
+  color: var(--rx-color-text-muted);
+}
+
+.rx-empty > .rx-icon {
+  color: var(--rx-color-text-faint);
+}
+
+.rx-empty > p {
+  margin: 0;
+}
+
+.rx-empty-title {
+  color: var(--rx-color-text);
+  font-size: var(--rx-text-1);
+  font-weight: var(--rx-weight-medium);
+}
+
+/*
+ * What the agent will and will not do. Structural guarantees, so they read as a
+ * list of facts rather than as marketing.
+ */
+.rx-guarantees {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  margin: var(--rx-space-2) 0 0;
+  padding-left: var(--rx-space-4);
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-guarantees > li::marker {
+  color: var(--rx-color-accent);
+}
+
 .rx-icon-button {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: calc(28px * var(--rx-density));
@@ -272,16 +479,49 @@ textarea {
   background: transparent;
   color: var(--rx-color-text-muted);
   cursor: pointer;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    color var(--rx-duration-fast) var(--rx-ease-standard),
+    box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
 }
 
-.rx-icon-button:hover {
+.rx-icon-button:hover:not(:disabled) {
   background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-icon-button:active:not(:disabled) {
+  background: var(--rx-color-surface-3);
   color: var(--rx-color-text);
 }
 
 .rx-icon-button[data-active='true'] {
   background: var(--rx-color-surface-3);
   color: var(--rx-color-accent);
+  box-shadow: inset 0 0 0 var(--rx-border-width)
+    color-mix(in oklch, var(--rx-color-accent) 34%, transparent);
+}
+
+.rx-icon-button[data-active='true']:hover:not(:disabled) {
+  color: var(--rx-color-accent);
+}
+
+.rx-icon-button:disabled {
+  opacity: var(--rx-opacity-disabled);
+  cursor: default;
+  background: transparent;
+}
+
+/*
+ * Icons.
+ *
+ * Every glyph in the chrome is an inline SVG from `ui/Icon.tsx` rather than a
+ * text character: a font glyph arrives at whatever weight, size and baseline
+ * the platform happens to have, and falls back to tofu when it is missing.
+ */
+.rx-icon {
+  display: block;
+  flex: none;
 }
 
 .rx-input {
@@ -323,13 +563,134 @@ textarea {
   margin-bottom: var(--rx-space-1);
 }
 
+/* Icon-plus-text on one baseline, wherever a label or badge needs it. */
+.rx-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+}
+
+/*
+ * Selects.
+ *
+ * The native control paints its own arrow in the OS palette, which reads as a
+ * foreign object inside glass. Dropping `appearance` hands the whole box to the
+ * tokens; the caret comes back as `--rx-select-chevron`, an SVG the token engine
+ * paints in the theme's muted text colour so it retints with everything else.
+ */
+select.rx-input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: var(--rx-space-7);
+  background-image: var(--rx-select-chevron);
+  background-repeat: no-repeat;
+  background-position: right var(--rx-space-2) center;
+  background-size: var(--rx-space-4) var(--rx-space-4);
+  cursor: pointer;
+  transition:
+    border-color var(--rx-duration-fast) var(--rx-ease-standard),
+    background-color var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+select.rx-input:hover {
+  border-color: var(--rx-color-border-strong);
+  background-color: var(--rx-color-surface-2);
+}
+
+/* The popup is an OS window, so this is all the theming it will accept. */
+select.rx-input option {
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text);
+}
+
+/* Spinners are unusable at this size and the arrows fight the glass. */
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+/*
+ * Checkboxes.
+ *
+ * `accent-color` alone still leaves the OS box shape and its own corner radius,
+ * so the box is rebuilt from tokens and the tick is drawn with two borders --
+ * cheaper than an image and it inherits the accent-text colour.
+ */
+input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: none;
+  width: var(--rx-space-4);
+  height: var(--rx-space-4);
+  margin: 0;
+  border: var(--rx-border-width) solid var(--rx-color-border-strong);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-1);
+  accent-color: var(--rx-color-accent);
+  cursor: pointer;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    border-color var(--rx-duration-fast) var(--rx-ease-standard),
+    box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+input[type='checkbox']::before {
+  content: '';
+  width: var(--rx-space-1);
+  height: calc(var(--rx-space-2) * 0.9);
+  border: solid var(--rx-color-accent-text);
+  border-width: 0 calc(var(--rx-border-width) * 2) calc(var(--rx-border-width) * 2) 0;
+  transform: translateY(calc(var(--rx-border-width) * -1)) rotate(45deg);
+  opacity: 0;
+  transition: opacity var(--rx-duration-instant) var(--rx-ease-standard);
+}
+
+input[type='checkbox']:hover {
+  border-color: var(--rx-color-accent);
+}
+
+input[type='checkbox']:checked {
+  background: var(--rx-color-accent);
+  border-color: var(--rx-color-accent);
+}
+
+input[type='checkbox']:checked::before {
+  opacity: 1;
+}
+
+input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--rx-space-1) color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
+}
+
+/*
+ * A section label belongs to what is below it, not between two things. Large
+ * gap above, small gap below -- otherwise the eye has to guess which side it
+ * labels, and every section header in the app reads as floating.
+ */
 .rx-section-title {
   font-size: var(--rx-text-n2);
   font-weight: var(--rx-weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--rx-color-text-faint);
-  padding: var(--rx-space-2) var(--rx-space-2) var(--rx-space-1);
+  color: var(--rx-color-text-muted);
+  padding: 0 var(--rx-space-1);
+  margin-block: var(--rx-space-5) var(--rx-space-2);
+}
+
+/* The first label in a scroll region has nothing above it to separate from. */
+.rx-panel-scroll > section:first-child > .rx-section-title,
+.rx-panel-scroll > .rx-section-title:first-child {
+  margin-block-start: 0;
 }
 
 /* ------------------------------------------------------------------ *
@@ -350,10 +711,32 @@ textarea {
   font-size: var(--rx-text-1);
 }
 
+.rx-workspace-chip:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
 .rx-workspace-chip[data-active='true'] {
   border-color: var(--rx-workspace-accent);
   color: var(--rx-color-text);
   box-shadow: 0 0 0 1px var(--rx-workspace-accent), 0 0 16px -4px var(--rx-workspace-accent);
+}
+
+/*
+ * "New workspace" is not a workspace. Dashed and unfilled so the rail reads as
+ * "here are your places, and here is how to add one" rather than as one more
+ * place that happens to be labelled with a plus.
+ */
+.rx-workspace-chip[data-new='true'] {
+  border-style: dashed;
+  border-color: var(--rx-color-border-strong);
+  background: transparent;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-workspace-chip[data-new='true']:hover {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-accent);
 }
 
 /* ------------------------------------------------------------------ *
@@ -390,17 +773,45 @@ textarea {
   padding: 0 var(--rx-space-2);
   border-radius: var(--rx-radius-md);
   cursor: pointer;
-  color: var(--rx-color-text-muted);
+  /*
+   * Not `text-muted`. Muted is for metadata; a tab title is the content of the
+   * strip, and rendering every inactive one in the supporting colour made the
+   * whole sidebar read as disabled.
+   */
+  color: var(--rx-color-text);
   min-width: 0;
 }
 
-.rx-tab[data-active='true'] {
+/*
+ * An inactive tab used to be bare text with no row behind it, so there was no
+ * way to tell where the click target began -- the strip read as a list of
+ * labels rather than a list of tabs.
+ */
+.rx-tab:hover {
   background: var(--rx-color-surface-2);
   color: var(--rx-color-text);
 }
 
+.rx-tab[data-active='true'] {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+/* The active tab also carries an accent edge, so it survives a busy theme. */
+.rx-tab[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
+}
+
 .rx-tab[data-suspended='true'] .rx-tab-title {
-  opacity: 0.55;
+  opacity: var(--rx-opacity-disabled);
 }
 
 .rx-tab[data-dragging='true'] {
@@ -409,6 +820,11 @@ textarea {
   background: var(--rx-color-surface-3);
 }
 
+/*
+ * The favicon slot always draws something. Most pages in a fresh profile have
+ * no icon yet, and an empty 16px hole in every row is what makes a tab strip
+ * look unfinished -- so the fallback is a real monogram chip, not a faint dot.
+ */
 .rx-tab-favicon {
   width: 16px;
   height: 16px;
@@ -417,8 +833,21 @@ textarea {
   place-items: center;
   border-radius: var(--rx-radius-sm);
   overflow: hidden;
-  font-size: 10px;
-  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n2);
+  font-weight: var(--rx-weight-medium);
+  line-height: 1;
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-muted);
+}
+
+/* A real icon needs no chip behind it. */
+.rx-tab-favicon:has(img),
+.rx-tab-favicon:has(svg) {
+  background: transparent;
+}
+
+.rx-tab[data-active='true'] .rx-tab-favicon {
+  color: var(--rx-color-text);
 }
 
 .rx-tab-favicon img {
@@ -460,7 +889,8 @@ textarea {
 
 .rx-tab-pin {
   flex: none;
-  font-size: 9px;
+  display: grid;
+  place-items: center;
   color: var(--rx-color-accent);
 }
 
@@ -491,7 +921,9 @@ textarea {
 }
 
 .rx-group-caret {
-  display: inline-block;
+  display: grid;
+  place-items: center;
+  flex: none;
   transition: transform var(--rx-duration-fast) var(--rx-ease-standard);
 }
 
@@ -523,6 +955,67 @@ textarea {
 .rx-omnibox-input:focus-visible {
   border-color: var(--rx-color-accent);
   outline: none;
+}
+
+/*
+ * The resting address. Stacked exactly on top of the input rather than
+ * replacing it, so focus, selection and the caret all still belong to the real
+ * field -- clicking here just focuses it.
+ */
+.rx-omnibox-input[data-hidden='true'] {
+  color: transparent;
+}
+
+.rx-omnibox-display {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  padding: 0 var(--rx-space-3);
+  border: none;
+  border-radius: var(--rx-radius-pill);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: text;
+  text-align: left;
+  min-width: 0;
+}
+
+.rx-omnibox-display[data-security='plain'] > .rx-icon,
+.rx-omnibox-display[data-security='internal'] > .rx-icon {
+  color: var(--rx-color-text-faint);
+}
+
+.rx-omnibox-display[data-security='secure'] > .rx-icon {
+  color: var(--rx-color-success);
+}
+
+.rx-omnibox-url {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* The host is the part that must survive; the path is what gets cut. */
+.rx-omnibox-host {
+  flex: none;
+  color: var(--rx-color-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-omnibox-dim {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-omnibox-dim:first-child {
+  flex: none;
 }
 
 .rx-suggestions {
@@ -576,7 +1069,7 @@ textarea {
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  background: oklch(0 0 0 / 0.28);
+  background: var(--rx-color-scrim);
 }
 
 .rx-palette {
@@ -600,7 +1093,80 @@ textarea {
 .rx-palette-list {
   max-height: 46vh;
   overflow-y: auto;
-  padding: var(--rx-space-1);
+  padding: var(--rx-space-1) var(--rx-space-1) var(--rx-space-2);
+  overscroll-behavior: contain;
+}
+
+/* Groups inside the palette sit tighter than a settings section does. */
+.rx-palette-list .rx-section-title {
+  margin-block: var(--rx-space-3) var(--rx-space-1);
+  padding-inline: var(--rx-space-2);
+}
+
+.rx-palette-list > section:first-child > .rx-section-title {
+  margin-block-start: var(--rx-space-1);
+}
+
+.rx-palette-empty {
+  padding: var(--rx-space-4) var(--rx-space-3);
+  color: var(--rx-color-text-muted);
+  text-align: center;
+}
+
+/*
+ * A bounded list needs a bottom edge, or a row clipped by the max-height reads
+ * as the app having run out rather than as more to scroll.
+ */
+.rx-palette-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-3);
+  padding: var(--rx-space-2) var(--rx-space-4);
+  border-top: var(--rx-border-width) solid var(--rx-color-border);
+  font-size: var(--rx-text-n2);
+  color: var(--rx-color-text-faint);
+}
+
+/*
+ * Actions that apply to a whole panel, below a rule at the end of it. Separated
+ * because "Clear all" sitting flush against the last row is one mis-click from
+ * a list you cannot get back.
+ */
+.rx-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-2);
+  margin-top: var(--rx-space-4);
+  padding-top: var(--rx-space-3);
+  border-top: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+/* Destructive actions need a visible edge; bare red text reads as a warning. */
+.rx-button[data-variant='danger'] {
+  border-color: var(--rx-color-border);
+}
+
+.rx-button[data-variant='danger']:hover:not(:disabled) {
+  border-color: var(--rx-color-danger);
+  background: transparent;
+  color: var(--rx-color-danger);
+}
+
+/* One key chip, used by the palette and anywhere else a binding is shown. */
+.rx-kbd {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text-muted);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ *
@@ -666,6 +1232,55 @@ textarea {
   color: var(--rx-color-success);
 }
 
+/* A run said something that is neither the answer nor a failure: a fallback
+ * provider took over, or the budget spoke up. */
+.rx-notice {
+  color: var(--rx-color-warning);
+  font-size: var(--rx-text-n1);
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-2);
+}
+
+/* ------------------------------------------------------------------ *
+ * Spend meter
+ * ------------------------------------------------------------------ */
+
+.rx-meter {
+  height: var(--rx-space-2);
+  width: 100%;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-3);
+  overflow: hidden;
+}
+
+.rx-meter-fill {
+  height: 100%;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
+}
+
+.rx-meter[data-status='warn'] .rx-meter-fill {
+  background: var(--rx-color-warning);
+}
+
+.rx-meter[data-status='over'] .rx-meter-fill {
+  background: var(--rx-color-danger);
+}
+
+.rx-usage-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--rx-space-1) var(--rx-space-2);
+  padding: var(--rx-space-2);
+  border-bottom: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+.rx-usage-row:last-child {
+  border-bottom: none;
+}
+
 .rx-card {
   padding: var(--rx-space-3);
   border: var(--rx-border-width) solid var(--rx-color-border);
@@ -676,45 +1291,79 @@ textarea {
   gap: var(--rx-space-2);
 }
 
+/*
+ * Sliders.
+ *
+ * `accent-color` gets the colour right and nothing else: the track keeps the
+ * platform's height, the thumb keeps its shadow, and neither responds to the
+ * geometry tokens. Both parts are rebuilt here.
+ *
+ * The filled portion is a hard-stopped gradient on the track rather than a
+ * second element, because a range input has no room for one. `--rx-slider-fill`
+ * is written by the Slider component as a percentage -- the value is data, not
+ * a design decision, which is why it is not a theme token.
+ */
 .rx-slider {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  accent-color: var(--rx-color-accent);
-}
-
-.rx-swatch-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: var(--rx-space-2);
-}
-
-.rx-preset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--rx-space-1);
-  padding: var(--rx-space-2);
-  border: var(--rx-border-width) solid var(--rx-color-border);
-  border-radius: var(--rx-radius-md);
-  cursor: pointer;
+  height: var(--rx-space-5);
+  margin: 0;
+  padding: 0;
   background: transparent;
-  color: var(--rx-color-text-muted);
-  text-align: left;
+  accent-color: var(--rx-color-accent);
+  cursor: pointer;
 }
 
-.rx-preset[data-active='true'] {
-  border-color: var(--rx-color-accent);
-  color: var(--rx-color-text);
+.rx-slider::-webkit-slider-runnable-track {
+  height: var(--rx-space-1);
+  border-radius: var(--rx-radius-pill);
+  background:
+    linear-gradient(
+        to right,
+        var(--rx-color-accent) 0 var(--rx-slider-fill, 0%),
+        transparent var(--rx-slider-fill, 0%) 100%
+      ),
+    var(--rx-color-surface-3);
 }
 
-.rx-preset-swatches {
-  display: flex;
-  gap: 3px;
+.rx-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--rx-space-4);
+  height: var(--rx-space-4);
+  /* Centre the thumb on a track that is thinner than it is. */
+  margin-top: calc((var(--rx-space-1) - var(--rx-space-4)) / 2);
+  border: none;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
+  box-shadow:
+    var(--rx-elevation-1),
+    0 0 0 0 color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
+  transition: box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
 }
 
-.rx-preset-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--rx-radius-sm);
-  border: 1px solid var(--rx-color-border);
+.rx-slider:hover::-webkit-slider-thumb {
+  box-shadow:
+    var(--rx-elevation-1),
+    0 0 0 var(--rx-space-1) color-mix(in oklch, var(--rx-color-accent) 26%, transparent);
+}
+
+.rx-slider:active::-webkit-slider-thumb,
+.rx-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    var(--rx-elevation-2),
+    0 0 0 calc(var(--rx-space-1) * 1.5) color-mix(in oklch, var(--rx-color-accent) 34%, transparent);
+}
+
+/* The ring above is the focus affordance; the default outline would clip. */
+.rx-slider:focus-visible {
+  outline: none;
+}
+
+.rx-slider:disabled {
+  opacity: var(--rx-opacity-disabled);
+  cursor: not-allowed;
 }
 
 /* ------------------------------------------------------------------ *
@@ -727,6 +1376,18 @@ textarea {
   flex: 1;
   min-height: 0;
   gap: var(--rx-space-2);
+}
+
+/* Provider + model selection. Grows a row when a provider has no model list
+   yet and the picker has to offer discovery or a typed model id. */
+.rx-model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+}
+
+.rx-model-picker > .rx-row > .rx-input {
+  min-width: 0;
 }
 
 .rx-chat-log {
@@ -786,25 +1447,102 @@ textarea {
   }
 }
 
+/* A reasoning model's visible thinking. Collapsed by default: it is context for
+   the answer, not the answer, and expanding it should be a choice. */
+.rx-reasoning {
+  border-left: var(--rx-border-width) solid var(--rx-color-border-strong);
+  padding-left: var(--rx-space-2);
+  margin-bottom: var(--rx-space-2);
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n2);
+}
+
+.rx-reasoning > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.rx-reasoning > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rx-reasoning > .rx-message-body {
+  margin-top: var(--rx-space-1);
+  white-space: pre-wrap;
+  color: var(--rx-color-text-faint);
+}
+
+/* A labelled block of chips: heading, then the chips, as one unit. */
+.rx-chat-context {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.rx-chat-context > .rx-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+  margin-block: var(--rx-space-3) var(--rx-space-2);
+}
+
+/* A count beside a section label is data, not part of the label. */
+.rx-chat-context > .rx-section-title > .rx-faint {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.rx-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-1);
+}
+
+/*
+ * A context chip is a toggle over what the model can see -- filled when on,
+ * outlined when off. Deliberately a different shape from a quick action, which
+ * is a button that fires a request; they used to be indistinguishable pills.
+ */
 .rx-context-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--rx-space-1);
+  max-width: 190px;
   padding: 2px var(--rx-space-2);
-  border: var(--rx-border-width) solid var(--rx-color-border);
-  border-radius: var(--rx-radius-pill);
+  border: var(--rx-border-width) solid transparent;
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
   font-size: var(--rx-text-n2);
-  color: var(--rx-color-text-muted);
+  color: var(--rx-color-text-faint);
   cursor: pointer;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    color var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-context-chip:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-muted);
 }
 
 .rx-context-chip[data-on='true'] {
+  background: var(--rx-color-accent);
   border-color: var(--rx-color-accent);
-  color: var(--rx-color-text);
+  color: var(--rx-color-accent-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+/* The label is what truncates; the icon and the chip's shape stay put. */
+.rx-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rx-toast {
@@ -830,4 +1568,200 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Find bar
+ * ------------------------------------------------------------------ */
+
+.rx-find {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  margin: 0 var(--rx-space-3) var(--rx-space-2);
+  padding: var(--rx-space-1) var(--rx-space-2);
+  border-radius: var(--rx-radius-pill);
+}
+
+.rx-find .rx-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * AI quick actions
+ * ------------------------------------------------------------------ */
+
+.rx-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-1);
+  flex: none;
+}
+
+.rx-quick-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  padding: 3px var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-pill);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
+  cursor: pointer;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    border-color var(--rx-duration-fast) var(--rx-ease-standard),
+    transform var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-quick-action:hover:not(:disabled) {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-text);
+  transform: translateY(-1px);
+}
+
+.rx-quick-action:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.rx-quick-action:disabled {
+  opacity: var(--rx-opacity-disabled);
+  cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------------ *
+ * Keybinding editor
+ * ------------------------------------------------------------------ */
+
+.rx-keycap {
+  min-width: 88px;
+  padding: 3px var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-bottom-width: 2px;
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+  cursor: pointer;
+  text-align: center;
+}
+
+.rx-keycap:hover {
+  border-color: var(--rx-color-accent);
+}
+
+/* Armed and waiting for the next keypress. */
+.rx-keycap[data-capturing='true'] {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-accent);
+  animation: rx-pulse calc(var(--rx-duration-slow) * 3) ease-in-out infinite;
+}
+
+@keyframes rx-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Provider directory
+ * ------------------------------------------------------------------ */
+
+.rx-directory-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  padding: var(--rx-space-2);
+  border: none;
+  border-radius: var(--rx-radius-md);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.rx-directory-row:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-directory-row[data-blocked='true'] {
+  opacity: var(--rx-opacity-disabled);
+}
+
+.rx-directory-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-2) var(--rx-space-2) var(--rx-space-3);
+  margin-left: var(--rx-space-2);
+  border-left: 2px solid var(--rx-color-accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Agent
+ * ------------------------------------------------------------------ */
+
+.rx-agent-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  flex: none;
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+}
+
+.rx-agent-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--rx-color-text-faint);
+}
+
+/* Pulses only while the agent is actually doing something. */
+.rx-agent-dot[data-busy='true'] {
+  background: var(--rx-color-accent);
+  animation: rx-agent-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rx-agent-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--rx-color-accent) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.rx-agent-step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-1) 0;
+  user-select: text;
+}
+
+.rx-agent-step-kind {
+  flex: none;
+  width: 54px;
+  font-size: var(--rx-text-n2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rx-color-accent);
+}
+
+.rx-agent-step[data-ok='false'] .rx-agent-step-kind {
+  color: var(--rx-color-danger);
 }

@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState, type JSX } from 'react'
+import { forwardRef, useCallback, useRef, useState, type JSX } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useActiveWorkspace, useAppStore } from '../store/useAppStore'
 import { useUiStore } from '../store/useUiStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { Icon } from '../ui/Icon'
 import { Button, IconButton } from '../ui/primitives'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { TabStrip } from './TabStrip'
@@ -15,15 +16,23 @@ import { BookmarksPanel } from './BookmarksPanel'
  * The handle writes straight into the UI store; App turns the resulting width
  * into the chrome insets main uses to place the page view, so dragging this
  * edge really does resize the web page.
+ *
+ * The ref is forwarded to the real root element on purpose. App used to measure
+ * a `display: contents` wrapper, which generates no box at all: the rect came
+ * back as zeros, the left inset reached main as 0, and the page view was placed
+ * over the top of the sidebar.
  */
-export function Sidebar(): JSX.Element {
+export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwardedRef): JSX.Element {
   const workspace = useActiveWorkspace()
   const workspaceCount = useAppStore((store) => store.state.workspaces.length)
+  const bookmarkCount = useAppStore((store) => store.state.bookmarks.length)
+  const tabCount = useAppStore(
+    (store) => store.state.tabs.filter((tab) => tab.workspaceId === store.state.activeWorkspaceId).length
+  )
   const { sidebarOpen, sidebarWidth, setSidebarWidth, bookmarksOpen, toggleBookmarks } = useUiStore()
   const { spring } = useMotionTokens()
 
   const [dragging, setDragging] = useState(false)
-  const frameRef = useRef<HTMLDivElement>(null)
 
   const startResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -47,8 +56,13 @@ export function Sidebar(): JSX.Element {
   )
 
   return (
-    <div className="rx-glass rx-sidebar" data-surface="chrome" ref={frameRef} style={{ borderRadius: 0, borderLeft: 'none', borderTop: 'none', borderBottom: 'none' }}>
-      <div className="rx-rail">
+    <div
+      className="rx-glass rx-sidebar"
+      data-surface="chrome"
+      data-radius-part="sidebar"
+      ref={forwardedRef}
+    >
+      <div className="rx-rail" data-radius-part="workspace-rail">
         <div className="rx-rail-drag" />
         <WorkspaceSwitcher />
       </div>
@@ -64,40 +78,58 @@ export function Sidebar(): JSX.Element {
             transition={spring('panel')}
             style={{ overflow: 'hidden' }}
           >
-            <div className="rx-row-between" style={{ paddingInline: 'var(--rx-space-1)' }}>
+            {/*
+              The workspace name is editable in place, so it is a real input --
+              but it should read as a heading until you click it, not as a form
+              field sitting at the top of the sidebar.
+            */}
+            <div className="rx-sidebar-header">
               <input
-                className="rx-input"
-                style={{ border: 'none', background: 'transparent', fontWeight: 'var(--rx-weight-medium)', paddingInline: 0 }}
+                className="rx-workspace-name"
                 value={workspace?.name ?? ''}
                 placeholder="Workspace"
+                aria-label="Workspace name"
                 onChange={(event) => {
                   if (workspace) {
                     send('workspaces:update', { workspaceId: workspace.id, name: event.target.value })
                   }
                 }}
               />
-              <IconButton
-                aria-label="New tab"
-                title="New tab  ⌘T"
-                onClick={() => send('tabs:create', {})}
-              >
-                +
+              <span className="rx-faint">{tabCount || ''}</span>
+              <IconButton aria-label="New tab" title="New tab" onClick={() => send('tabs:create', {})}>
+                <Icon name="plus" />
               </IconButton>
             </div>
 
             <TabStrip />
 
-            <BookmarksPanel open={bookmarksOpen} />
+            {/*
+              Bookmarks and workspace deletion both belong to the frame rather
+              than to the tab list, so they sit below a rule. The destructive one
+              is last and named, not a bare red icon beside a disclosure toggle.
+            */}
+            <div className="rx-sidebar-footer">
+              <button
+                type="button"
+                className="rx-disclosure"
+                aria-expanded={bookmarksOpen}
+                onClick={toggleBookmarks}
+              >
+                <Icon name={bookmarksOpen ? 'chevron-down' : 'chevron-right'} size={14} />
+                <span className="rx-disclosure-label">Bookmarks</span>
+                {bookmarkCount > 0 ? <span className="rx-faint">{bookmarkCount}</span> : null}
+              </button>
 
-            <div className="rx-row" style={{ flex: 'none', gap: 'var(--rx-space-1)' }}>
-              <Button onClick={toggleBookmarks}>{bookmarksOpen ? '▾' : '▸'} Bookmarks</Button>
+              <BookmarksPanel open={bookmarksOpen} />
+
               {workspaceCount > 1 && workspace ? (
                 <Button
                   variant="danger"
-                  title="Delete this workspace"
+                  title={`Delete the "${workspace.name}" workspace and its tabs`}
                   onClick={() => send('workspaces:delete', { workspaceId: workspace.id })}
                 >
-                  ␡
+                  <Icon name="trash" size={14} />
+                  Delete workspace
                 </Button>
               ) : null}
             </div>
@@ -116,4 +148,4 @@ export function Sidebar(): JSX.Element {
       ) : null}
     </div>
   )
-}
+})
