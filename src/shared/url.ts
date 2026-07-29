@@ -74,3 +74,53 @@ export function displayHost(url: string): string {
     return url
   }
 }
+
+/**
+ * An address split into the part that identifies who you are talking to and the
+ * part that does not.
+ *
+ * Browsers do this for a reason that is security, not decoration: an attacker's
+ * advantage is a long path that pushes the real host out of view, so the host
+ * has to be the thing that survives truncation and the thing the eye lands on.
+ * `security` drives the leading indicator, and it reports what the scheme
+ * actually is rather than reassuring.
+ */
+export interface DisplayUrl {
+  security: 'secure' | 'plain' | 'internal'
+  /** Scheme and any `www.`, shown dimmed. Empty for internal pages. */
+  prefix: string
+  /** The registrable host, or the scheme for an internal page. Never truncated first. */
+  host: string
+  /** Path, query and fragment. Truncated before anything else. */
+  rest: string
+}
+
+export function formatUrlForDisplay(raw: string): DisplayUrl | null {
+  if (!raw) return null
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return null
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    // about:, file:, data:, chrome-error: -- there is no host to emphasise, and
+    // pretending otherwise would put a lock beside something that has none.
+    return {
+      security: 'internal',
+      prefix: '',
+      host: parsed.protocol.replace(/:$/, ''),
+      rest: raw.slice(parsed.protocol.length).replace(/^\/\//, '')
+    }
+  }
+
+  const bare = parsed.hostname.replace(/^www\./, '')
+  const port = parsed.port ? `:${parsed.port}` : ''
+  return {
+    security: parsed.protocol === 'https:' ? 'secure' : 'plain',
+    prefix: `${parsed.protocol}//${parsed.hostname === bare ? '' : 'www.'}`,
+    host: `${bare}${port}`,
+    rest: `${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}${parsed.hash}`
+  }
+}

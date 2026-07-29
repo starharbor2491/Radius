@@ -1,0 +1,280 @@
+/*
+ * The layout editor: dockable regions, their resize handles, and the drop
+ * targets shown while a panel is in flight.
+ *
+ * Same rule as app.css -- every value here reads a `--rx-*` custom property.
+ * The only bare numbers are structural (zero, one hundred percent, a stacking
+ * order), which carry no design decision and so have no token to read.
+ */
+
+/* ------------------------------------------------------------------ *
+ * The shell
+ * ------------------------------------------------------------------ */
+
+/*
+ * The shell used to be a three-column grid, because the chrome had exactly
+ * three columns: sidebar, page, right panel. It now has a variable number --
+ * the left dock is a real element only while something is docked in it -- and
+ * a fixed `grid-template-columns` would hand `1fr` to whichever child happened
+ * to land in the middle slot. Flex places them by order instead, so a region
+ * appearing or disappearing cannot shuffle the others.
+ *
+ * The `body` prefix is deliberate: `@import` puts this file's rules *before*
+ * app.css's own, so at equal specificity app.css would win. This is the one
+ * place in the stylesheet that overrides rather than adds.
+ */
+body .rx-shell {
+  display: flex;
+  flex-direction: row;
+}
+
+body .rx-shell > .rx-sidebar {
+  flex: none;
+}
+
+body .rx-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * A dock region
+ * ------------------------------------------------------------------ */
+
+.rx-dock {
+  position: relative;
+  display: flex;
+  flex: none;
+  /* The page view butts right up against these, so square them off. */
+  border-radius: 0;
+}
+
+.rx-dock[data-region='left'],
+.rx-dock[data-region='right'] {
+  height: 100%;
+}
+
+.rx-dock[data-region='left'] {
+  border-block-width: 0;
+  border-inline-start-width: 0;
+}
+
+.rx-dock[data-region='right'] {
+  border-block-width: 0;
+  border-inline-end-width: 0;
+}
+
+.rx-dock[data-region='bottom'] {
+  width: 100%;
+  border-inline-width: 0;
+  border-block-end-width: 0;
+}
+
+/*
+ * The body carries its own explicit size, set from the layout document, so its
+ * contents do not reflow on every frame while the region's size is animating.
+ */
+.rx-dock-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--rx-space-3);
+  gap: var(--rx-space-3);
+}
+
+.rx-dock[data-region='left'] .rx-dock-body,
+.rx-dock[data-region='right'] .rx-dock-body {
+  height: 100%;
+}
+
+.rx-dock[data-region='bottom'] .rx-dock-body {
+  width: 100%;
+}
+
+/* ------------------------------------------------------------------ *
+ * Resizing
+ * ------------------------------------------------------------------ */
+
+/*
+ * Overlaid on the region's leading edge rather than taking a column of its
+ * own, so the body can be exactly as wide as the layout document says and the
+ * renderer never needs to know the handle's thickness to do the arithmetic.
+ */
+.rx-dock-resize {
+  position: absolute;
+  z-index: 1;
+  background: transparent;
+  transition: background var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-dock[data-region='left'] .rx-dock-resize,
+.rx-dock[data-region='right'] .rx-dock-resize {
+  inset-block: 0;
+  width: var(--rx-space-2);
+  cursor: col-resize;
+}
+
+.rx-dock[data-region='left'] .rx-dock-resize {
+  right: 0;
+}
+
+.rx-dock[data-region='right'] .rx-dock-resize {
+  left: 0;
+}
+
+.rx-dock[data-region='bottom'] .rx-dock-resize {
+  inset-inline: 0;
+  top: 0;
+  height: var(--rx-space-2);
+  cursor: row-resize;
+}
+
+.rx-dock-resize:hover,
+.rx-dock-resize[data-dragging='true'] {
+  background: var(--rx-color-accent);
+  opacity: 0.35;
+}
+
+/* ------------------------------------------------------------------ *
+ * The drag handle
+ * ------------------------------------------------------------------ */
+
+.rx-dock-grab {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  min-width: 0;
+  padding: var(--rx-space-1);
+  margin-inline-start: calc(var(--rx-space-1) * -1);
+  border-radius: var(--rx-radius-sm);
+  color: var(--rx-color-text-faint);
+  cursor: grab;
+  transition: background var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-dock-grab:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text-muted);
+}
+
+.rx-dock-grab:active {
+  cursor: grabbing;
+}
+
+.rx-dock-grab .rx-panel-title {
+  color: var(--rx-color-text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ *
+ * Drop targets
+ * ------------------------------------------------------------------ *
+ * Visible only because starting a drag puts the chrome into overlay mode: the
+ * left and bottom targets sit over ground the page view owns, and the chrome
+ * paints underneath that view the rest of the time.
+ */
+
+.rx-drop-layer {
+  position: fixed;
+  inset: 0;
+  /* Above the docks, below the command palette. */
+  z-index: 45;
+  pointer-events: none;
+}
+
+.rx-drop-zone {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--rx-space-2);
+  border: var(--rx-border-width) dashed var(--rx-color-border-strong);
+  border-radius: var(--rx-radius-lg);
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-drop-zone[data-region='left'] {
+  inset-block: 0;
+  inset-inline-start: 0;
+}
+
+.rx-drop-zone[data-region='right'] {
+  inset-block: 0;
+  inset-inline-end: 0;
+}
+
+.rx-drop-zone[data-region='bottom'] {
+  inset-inline: 0;
+  inset-block-end: 0;
+}
+
+.rx-drop-zone[data-active='true'] {
+  border-style: solid;
+  border-color: var(--rx-color-accent);
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+  box-shadow: var(--rx-elevation-3);
+}
+
+.rx-drop-label {
+  padding: var(--rx-space-1) var(--rx-space-3);
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-2);
+  font-weight: var(--rx-weight-medium);
+}
+
+/* ------------------------------------------------------------------ *
+ * The Settings section
+ * ------------------------------------------------------------------ */
+
+.rx-layout-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+  padding-block: var(--rx-space-2);
+}
+
+.rx-layout-region + .rx-layout-region {
+  border-block-start: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+.rx-layout-region-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-layout-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-1) var(--rx-space-2);
+  border-radius: var(--rx-radius-md);
+  background: var(--rx-color-surface-1);
+}
+
+.rx-layout-panel[data-open='true'] {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-layout-panel-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rx-layout-empty {
+  padding: var(--rx-space-2);
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}

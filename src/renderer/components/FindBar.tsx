@@ -72,6 +72,7 @@ export function FindBar(): JSX.Element {
         <motion.div
           key="find"
           className="rx-glass rx-find"
+          data-radius-part="find-bar"
           data-surface="popover"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}

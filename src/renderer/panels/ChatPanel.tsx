@@ -168,9 +168,13 @@ export function ChatPanel(): JSX.Element {
   if (usableProviders.length === 0) {
     return (
       <div className="rx-chat">
-        <div className="rx-faint">
-          Every provider is listed in Settings — paste a key into any one of them and it becomes
-          available here.
+        <div className="rx-empty">
+          <Icon name="key" size={20} />
+          <p className="rx-empty-title">No model is reachable yet</p>
+          <p>
+            Every provider is listed in Settings — paste a key into any one of them and it becomes
+            available here. Radius discovers its models for you.
+          </p>
         </div>
       </div>
     )
@@ -182,41 +186,69 @@ export function ChatPanel(): JSX.Element {
         <ModelPicker providerId={providerId} modelId={modelId} onChange={select} />
       </div>
 
-      <div className="rx-row" style={{ flex: 'none', flexWrap: 'wrap', gap: 4 }}>
-        {tabs.slice(0, 8).map((tab) => (
-          <span
-            key={tab.id}
-            className="rx-context-chip"
-            data-on={tab.inAiContext ? 'true' : 'false'}
-            title={tab.url}
-            onClick={() => send('tabs:setAiContext', { tabId: tab.id, inContext: !tab.inAiContext })}
-          >
-            <Icon name={tab.inAiContext ? 'sparkle' : 'plus'} size={11} />
-            {tab.title || displayHost(tab.url) || 'New tab'}
+      {/*
+        Two rows of pills that used to look identical. They are not the same
+        kind of thing: one is a toggle over what the model can see, the other
+        fires a request. Labelling them and styling them apart is the whole fix.
+      */}
+      <div className="rx-chat-context">
+        <div className="rx-section-title">
+          Context
+          <span className="rx-faint">
+            {contextTabs.length > 0 ? `${contextTabs.length} of ${tabs.length}` : 'none'}
           </span>
-        ))}
+        </div>
+        <div className="rx-chip-row">
+          {tabs.slice(0, 8).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className="rx-context-chip"
+              data-on={tab.inAiContext ? 'true' : 'false'}
+              title={tab.url}
+              aria-pressed={tab.inAiContext}
+              onClick={() =>
+                send('tabs:setAiContext', { tabId: tab.id, inContext: !tab.inAiContext })
+              }
+            >
+              <Icon name={tab.inAiContext ? 'check' : 'plus'} size={11} />
+              <span className="rx-chip-label">
+                {tab.title || displayHost(tab.url) || 'New tab'}
+              </span>
+            </button>
+          ))}
+          {tabs.length > 8 ? <span className="rx-faint">+{tabs.length - 8} more</span> : null}
+        </div>
       </div>
 
-      <div className="rx-quick-actions">
-        {QUICK_ACTIONS.map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            className="rx-quick-action"
-            title={action.hint}
-            disabled={!activeTab || Boolean(draft)}
-            onClick={() => void runQuickAction(action)}
-          >
-            <Icon name={action.icon as IconName} size={14} />
-            {action.label}
-          </button>
-        ))}
+      <div className="rx-chat-context">
+        <div className="rx-section-title">Do something with this page</div>
+        <div className="rx-quick-actions">
+          {QUICK_ACTIONS.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className="rx-quick-action"
+              title={action.hint}
+              disabled={!activeTab || Boolean(draft)}
+              onClick={() => void runQuickAction(action)}
+            >
+              <Icon name={action.icon as IconName} size={14} />
+              {action.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="rx-chat-log" ref={logRef}>
         {messages.length === 0 && !draft ? (
-          <div className="rx-faint">
-            Ask about the page, or tap a tab above to put it in context.
+          <div className="rx-empty">
+            <Icon name="sparkle" size={20} />
+            <p className="rx-empty-title">Ask about what you are looking at</p>
+            <p>
+              The page you are on is not shared until you add it. Tap a tab under
+              <strong> Context</strong>, or run one of the actions above.
+            </p>
           </div>
         ) : null}
 

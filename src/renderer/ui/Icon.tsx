@@ -153,6 +153,29 @@ const ICONS = {
     </>
   ),
 
+  /* ----------------------------------------------------- omnibox status */
+  /** https. */
+  lock: (
+    <>
+      <rect x="4.75" y="10.5" width="14.5" height="9.75" rx="2" />
+      <path d="M8.25 10.5V7.75a3.75 3.75 0 0 1 7.5 0v2.75" />
+    </>
+  ),
+  /** Plain http. Stated, not alarmed about. */
+  'lock-open': (
+    <>
+      <rect x="4.75" y="10.5" width="14.5" height="9.75" rx="2" />
+      <path d="M8.25 10.5V7.75a3.75 3.75 0 0 1 7.2-1.4" />
+    </>
+  ),
+  /** Anything that is not a web page: about:, file:, data:. */
+  page: (
+    <>
+      <path d="M6 3.75h7.5L18.5 8.5v11.75H6z" />
+      <path d="M13.25 3.9V8.6h4.9" />
+    </>
+  ),
+
   /* ------------------------------------------------------- quick actions */
   /** Summarize: lines shortening down the page. */
   list: (
@@ -205,6 +228,21 @@ const ICONS = {
       <path d="M4 8.5h16" />
       <path d="M4 8.5 1.75 14a2.6 2.6 0 0 0 4.5 0z" />
       <path d="M20 8.5 17.75 14a2.6 2.6 0 0 0 4.5 0z" />
+    </>
+  ),
+  /** A warning that is worth reading, not a failure: a contrast pair below AA. */
+  alert: (
+    <>
+      <path d="M12 4.2 21 19.5H3z" />
+      <path d="M12 10v4.2" />
+      <path d="M12 17.1h.01" />
+    </>
+  ),
+  /** Undo, in the "put back what was there" sense. */
+  revert: (
+    <>
+      <path d="M4 9.5h9.5a5.5 5.5 0 0 1 0 11H8" />
+      <path d="M7.75 5.75 3.5 9.5l4.25 3.75" />
     </>
   ),
   /** Across every tab: stacked planes. */

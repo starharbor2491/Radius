@@ -18,7 +18,8 @@ import {
   UsageRecordSchema,
   WorkspaceSchema
 } from './types'
-import { ThemeSchema } from './theme'
+import { ThemeImportResultSchema, ThemeOverrideSchema, ThemeSchema } from './theme'
+import { LayoutSchema, PanelIdSchema, RegionIdSchema } from './layout'
 import { AgentActionSchema, AgentPageMapSchema } from './agent'
 import { RoutingConfigSchema } from './routing'
 import { BudgetConfigSchema } from './budget'
@@ -122,12 +123,63 @@ export const ipcContract = {
       name: z.string().optional(),
       icon: z.string().optional(),
       accent: z.string().optional(),
-      themeId: z.string().nullable().optional()
+      themeId: z.string().nullable().optional(),
+      /**
+       * A partial token document merged over the theme while this workspace is
+       * active. `null` clears it; omitting it leaves it alone. Validated as
+       * loose JSON here and against the theme schema at merge time, so a
+       * workspace can override a token this build has never heard of without
+       * the channel rejecting it outright.
+       */
+      themeOverride: ThemeOverrideSchema.nullable().optional()
     }),
     response: Ok
   },
   'workspaces:delete': { request: z.object({ workspaceId: IdSchema }), response: Ok },
   'workspaces:reorder': { request: z.object({ orderedIds: z.array(IdSchema) }), response: Ok },
+
+  /* ------------------------------------------------------------ layout */
+  /**
+   * Panel docking, stored on the workspace.
+   *
+   * These are mutations like any other: main applies the pure move from
+   * `@shared/layout`, persists it, and pushes a fresh snapshot. The renderer
+   * never edits its mirror of the document -- a locally-applied move would
+   * reintroduce exactly the desync the snapshot design removes, and here it
+   * would show up as the page view sitting over a region that main has not been
+   * told about yet.
+   */
+  'layout:movePanel': {
+    request: z.object({
+      workspaceId: IdSchema,
+      panel: PanelIdSchema,
+      region: RegionIdSchema,
+      index: z.number().int().optional()
+    }),
+    response: Ok
+  },
+  'layout:setActive': {
+    request: z.object({
+      workspaceId: IdSchema,
+      region: RegionIdSchema,
+      panel: PanelIdSchema.nullable()
+    }),
+    response: Ok
+  },
+  'layout:resizeRegion': {
+    request: z.object({
+      workspaceId: IdSchema,
+      region: RegionIdSchema,
+      size: z.number()
+    }),
+    response: Ok
+  },
+  /** Replaces the whole document -- used by "apply preset" and by reset. */
+  'layout:set': {
+    request: z.object({ workspaceId: IdSchema, layout: LayoutSchema }),
+    response: Ok
+  },
+  'layout:reset': { request: z.object({ workspaceId: IdSchema }), response: Ok },
 
   /* ---------------------------------------------------------- bookmarks */
   'bookmarks:create': {
@@ -258,11 +310,28 @@ export const ipcContract = {
   'agent:stop': { request: z.object({ tabId: IdSchema }), response: Ok },
 
   /* -------------------------------------------------------- keybindings */
+  /**
+   * A binding value is either one accelerator (`Mod+T`) or a space-separated
+   * chord (`g t`); the shape on the wire is the same either way, which is why
+   * chords needed no migration.
+   */
   'keybindings:get': { request: Empty, response: z.record(z.string(), z.string()) },
   'keybindings:set': {
-    request: z.object({ bindings: z.record(z.string(), z.string()) }),
+    request: z.object({
+      bindings: z.record(z.string(), z.string()),
+      /** Which preset set this map came from, when the write is an "apply". */
+      preset: z.string().optional()
+    }),
     response: Ok
   },
+  /** Which preset set the current map started life as, if it is known. */
+  'keybindings:getPreset': { request: Empty, response: z.object({ preset: z.string().nullable() }) },
+  /**
+   * Records provenance *only*. Naming the set a map came from must never
+   * rewrite the map, or a user's own edits would vanish the moment something
+   * recognised which preset they started from.
+   */
+  'keybindings:setPreset': { request: z.object({ preset: z.string() }), response: Ok },
 
   /* -------------------------------------------------------------- theme */
   'theme:get': {
@@ -270,8 +339,20 @@ export const ipcContract = {
     response: z.object({ theme: ThemeSchema, presets: z.array(ThemeSchema) })
   },
   'theme:set': { request: z.object({ theme: ThemeSchema }), response: Ok },
-  'theme:importFile': { request: Empty, response: ThemeSchema.nullable() },
-  'theme:exportFile': { request: z.object({ theme: ThemeSchema }), response: Ok },
+  /**
+   * Opens a file dialog and reads a `.radius-theme.json`.
+   *
+   * The result is a report rather than a theme-or-null, because "this file is
+   * invalid" is not a useful thing to tell someone editing JSON by hand. A
+   * failure names the token path and what was wrong with it; a file that parses
+   * comes back with the theme *and* the paths it actually set, so the studio
+   * can say how much of the document was really in the file.
+   */
+  'theme:importFile': { request: Empty, response: ThemeImportResultSchema },
+  'theme:exportFile': {
+    request: z.object({ theme: ThemeSchema }),
+    response: z.object({ saved: z.boolean(), path: z.string().nullable() })
+  },
 
   /* ----------------------------------------------------------- settings */
   'settings:get': { request: Empty, response: z.record(z.string(), z.unknown()) },

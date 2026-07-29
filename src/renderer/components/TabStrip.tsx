@@ -145,7 +145,7 @@ export function TabStrip(): JSX.Element {
 
   return (
     <>
-      <div className="rx-tabs" ref={listRef} onScroll={() => setMenu(null)}>
+      <div className="rx-tabs" data-radius-part="tab-strip" ref={listRef} onScroll={() => setMenu(null)}>
         <AnimatePresence initial={false}>
           {sections.map((section) => {
             if (section.kind === 'tab' && section.tab) {
@@ -230,6 +230,7 @@ function TabItem({
       ref={(node) => register(tab.id, node)}
       layout={when(true, false)}
       className="rx-tab"
+      data-radius-part="tab"
       data-active={active ? 'true' : 'false'}
       data-suspended={tab.suspended ? 'true' : 'false'}
       data-dragging={dragging ? 'true' : 'false'}

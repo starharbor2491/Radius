@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { defaultLayout, parseLayout, type Layout } from '@shared/layout'
 import type { JsonStore } from '../store/JsonStore'
 import type {
   AppState,
@@ -185,8 +186,46 @@ export class StateStore {
 
   /* --------------------------------------------------------- workspaces */
 
+  /**
+   * Workspaces, oldest ordering first.
+   *
+   * The layout is normalised on the way out rather than trusted: a workspace
+   * persisted before the layout editor shipped has no `layout` key at all, and
+   * the renderer would otherwise read `undefined` and render nothing. Parsing
+   * here means one place has to know that, and the renderer always receives a
+   * complete document.
+   */
   listWorkspaces(): Workspace[] {
-    return [...this.workspaces].sort((a, b) => a.order - b.order)
+    return [...this.workspaces]
+      .sort((a, b) => a.order - b.order)
+      .map((workspace) => ({
+        ...workspace,
+        layout: parseLayout(workspace.layout),
+        // Same reasoning for the theme override: absent on an older document,
+        // and the renderer merges it blind.
+        themeOverride: workspace.themeOverride ?? null
+      }))
+  }
+
+  /* ------------------------------------------------------------- layout */
+
+  getWorkspaceLayout(workspaceId: string): Layout {
+    const workspace = this.workspaces.find((candidate) => candidate.id === workspaceId)
+    return parseLayout(workspace?.layout)
+  }
+
+  /**
+   * Writes a layout back onto its workspace.
+   *
+   * Takes the whole document rather than a patch because every caller already
+   * has one: the pure moves in `@shared/layout` return a complete layout, so
+   * there is nothing to merge.
+   */
+  setWorkspaceLayout(workspaceId: string, layout: Layout): void {
+    const workspace = this.workspaces.find((candidate) => candidate.id === workspaceId)
+    if (!workspace) return
+    workspace.layout = layout
+    this.commit()
   }
 
   createWorkspace(input: { name: string; icon: string; accent?: string }): Workspace {
@@ -197,6 +236,8 @@ export class StateStore {
       accent: input.accent ?? DEFAULT_ACCENTS[this.workspaces.length % DEFAULT_ACCENTS.length]!,
       order: this.workspaces.length,
       themeId: null,
+      themeOverride: null,
+      layout: defaultLayout(),
       createdAt: Date.now()
     }
     this.workspaces.push(workspace)
@@ -207,7 +248,7 @@ export class StateStore {
 
   updateWorkspace(
     workspaceId: string,
-    patch: Partial<Pick<Workspace, 'name' | 'icon' | 'accent' | 'themeId'>>
+    patch: Partial<Pick<Workspace, 'name' | 'icon' | 'accent' | 'themeId' | 'themeOverride'>>
   ): void {
     const workspace = this.workspaces.find((candidate) => candidate.id === workspaceId)
     if (!workspace) return

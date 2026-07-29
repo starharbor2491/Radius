@@ -6,6 +6,14 @@
  * comment -- that constraint is what makes the whole UI retheme at runtime.
  */
 
+/*
+ * Feature stylesheets. Split out so a feature's rules live next to nothing else,
+ * and so two people can work on two features without meeting in one file.
+ */
+@import './layout.css';
+@import './theming.css';
+@import './keybindings.css';
+
 *,
 *::before,
 *::after {
@@ -50,6 +58,39 @@ textarea {
   outline: 2px solid var(--rx-color-accent);
   outline-offset: 2px;
   border-radius: var(--rx-radius-sm);
+}
+
+/*
+ * Scrollbars, everywhere, once.
+ *
+ * A default Chromium scrollbar beside a themed glass panel is the loudest
+ * possible tell that the surface was assembled rather than designed. These are
+ * overlay-thin, appear against the content they scroll, and take their colour
+ * from the same border token as everything else.
+ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-border-strong);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rx-color-text-faint);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ------------------------------------------------------------------ *
@@ -124,6 +165,82 @@ textarea {
   display: flex;
   min-width: 0;
   height: 100%;
+  /* Flush against the window edge: only the inner edge is a real border. */
+  border-block: none;
+  border-inline-start: none;
+  border-radius: 0;
+}
+
+.rx-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  flex: none;
+  padding-inline: var(--rx-space-1);
+}
+
+/*
+ * The workspace name is a heading you can type into. It should not advertise
+ * that it is an input until you are in it -- a bordered field at the top of the
+ * sidebar reads as a search box and gets clicked as one.
+ */
+.rx-workspace-name {
+  flex: 1;
+  min-width: 0;
+  height: calc(28px * var(--rx-density));
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--rx-color-text);
+  font-size: var(--rx-text-1);
+  font-weight: var(--rx-weight-bold);
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.rx-workspace-name:hover,
+.rx-workspace-name:focus {
+  background: var(--rx-color-surface-2);
+  border-radius: var(--rx-radius-sm);
+  padding-inline: var(--rx-space-2);
+}
+
+.rx-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+  flex: none;
+  padding-top: var(--rx-space-2);
+  border-top: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+/* A disclosure header: full-width target, chevron, label, count. */
+.rx-disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  height: calc(28px * var(--rx-density));
+  padding: 0 var(--rx-space-2);
+  border: none;
+  border-radius: var(--rx-radius-md);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.rx-disclosure:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
+.rx-disclosure-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rx-rail {
@@ -186,6 +303,28 @@ textarea {
 
 .rx-toolbar > * {
   -webkit-app-region: no-drag;
+}
+
+/*
+ * Related controls sit tight together; the gap between groups is what does the
+ * separating. No dividers -- twelve icons need structure, not more lines.
+ */
+.rx-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+
+/* An unread/in-progress marker on an icon button. */
+.rx-badge-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
 }
 
 /*
@@ -256,12 +395,80 @@ textarea {
   color: var(--rx-color-danger);
 }
 
+/*
+ * Disabled has to read as disabled at a glance. A solid accent button at 40%
+ * opacity still looks like a filled, pressable button; dropping the fill is
+ * what actually communicates "not now".
+ */
 .rx-button:disabled {
-  opacity: 0.4;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
+.rx-button:disabled[data-variant='primary'] {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-faint);
+  font-weight: var(--rx-weight-normal);
+}
+
+.rx-button:disabled:hover {
+  background: transparent;
+  color: var(--rx-color-text-muted);
+}
+
+.rx-button:disabled[data-variant='primary']:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-faint);
+}
+
+/*
+ * An empty panel is the first thing a new user sees, so it says what to do in
+ * body text rather than whispering it in the faintest colour on the palette.
+ */
+.rx-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--rx-space-2);
+  padding: var(--rx-space-4) 0;
+  max-width: 44ch;
+  color: var(--rx-color-text-muted);
+}
+
+.rx-empty > .rx-icon {
+  color: var(--rx-color-text-faint);
+}
+
+.rx-empty > p {
+  margin: 0;
+}
+
+.rx-empty-title {
+  color: var(--rx-color-text);
+  font-size: var(--rx-text-1);
+  font-weight: var(--rx-weight-medium);
+}
+
+/*
+ * What the agent will and will not do. Structural guarantees, so they read as a
+ * list of facts rather than as marketing.
+ */
+.rx-guarantees {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  margin: var(--rx-space-2) 0 0;
+  padding-left: var(--rx-space-4);
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}
+
+.rx-guarantees > li::marker {
+  color: var(--rx-color-accent);
+}
+
 .rx-icon-button {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: calc(28px * var(--rx-density));
@@ -465,13 +672,25 @@ input[type='checkbox']:focus-visible {
   box-shadow: 0 0 0 var(--rx-space-1) color-mix(in oklch, var(--rx-color-accent) 30%, transparent);
 }
 
+/*
+ * A section label belongs to what is below it, not between two things. Large
+ * gap above, small gap below -- otherwise the eye has to guess which side it
+ * labels, and every section header in the app reads as floating.
+ */
 .rx-section-title {
   font-size: var(--rx-text-n2);
   font-weight: var(--rx-weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--rx-color-text-faint);
-  padding: var(--rx-space-2) var(--rx-space-2) var(--rx-space-1);
+  color: var(--rx-color-text-muted);
+  padding: 0 var(--rx-space-1);
+  margin-block: var(--rx-space-5) var(--rx-space-2);
+}
+
+/* The first label in a scroll region has nothing above it to separate from. */
+.rx-panel-scroll > section:first-child > .rx-section-title,
+.rx-panel-scroll > .rx-section-title:first-child {
+  margin-block-start: 0;
 }
 
 /* ------------------------------------------------------------------ *
@@ -492,10 +711,32 @@ input[type='checkbox']:focus-visible {
   font-size: var(--rx-text-1);
 }
 
+.rx-workspace-chip:hover {
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+}
+
 .rx-workspace-chip[data-active='true'] {
   border-color: var(--rx-workspace-accent);
   color: var(--rx-color-text);
   box-shadow: 0 0 0 1px var(--rx-workspace-accent), 0 0 16px -4px var(--rx-workspace-accent);
+}
+
+/*
+ * "New workspace" is not a workspace. Dashed and unfilled so the rail reads as
+ * "here are your places, and here is how to add one" rather than as one more
+ * place that happens to be labelled with a plus.
+ */
+.rx-workspace-chip[data-new='true'] {
+  border-style: dashed;
+  border-color: var(--rx-color-border-strong);
+  background: transparent;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-workspace-chip[data-new='true']:hover {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-accent);
 }
 
 /* ------------------------------------------------------------------ *
@@ -532,13 +773,41 @@ input[type='checkbox']:focus-visible {
   padding: 0 var(--rx-space-2);
   border-radius: var(--rx-radius-md);
   cursor: pointer;
-  color: var(--rx-color-text-muted);
+  /*
+   * Not `text-muted`. Muted is for metadata; a tab title is the content of the
+   * strip, and rendering every inactive one in the supporting colour made the
+   * whole sidebar read as disabled.
+   */
+  color: var(--rx-color-text);
   min-width: 0;
 }
 
-.rx-tab[data-active='true'] {
+/*
+ * An inactive tab used to be bare text with no row behind it, so there was no
+ * way to tell where the click target began -- the strip read as a list of
+ * labels rather than a list of tabs.
+ */
+.rx-tab:hover {
   background: var(--rx-color-surface-2);
   color: var(--rx-color-text);
+}
+
+.rx-tab[data-active='true'] {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+/* The active tab also carries an accent edge, so it survives a busy theme. */
+.rx-tab[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
 }
 
 .rx-tab[data-suspended='true'] .rx-tab-title {
@@ -551,6 +820,11 @@ input[type='checkbox']:focus-visible {
   background: var(--rx-color-surface-3);
 }
 
+/*
+ * The favicon slot always draws something. Most pages in a fresh profile have
+ * no icon yet, and an empty 16px hole in every row is what makes a tab strip
+ * look unfinished -- so the fallback is a real monogram chip, not a faint dot.
+ */
 .rx-tab-favicon {
   width: 16px;
   height: 16px;
@@ -559,8 +833,21 @@ input[type='checkbox']:focus-visible {
   place-items: center;
   border-radius: var(--rx-radius-sm);
   overflow: hidden;
-  font-size: 10px;
-  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n2);
+  font-weight: var(--rx-weight-medium);
+  line-height: 1;
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-muted);
+}
+
+/* A real icon needs no chip behind it. */
+.rx-tab-favicon:has(img),
+.rx-tab-favicon:has(svg) {
+  background: transparent;
+}
+
+.rx-tab[data-active='true'] .rx-tab-favicon {
+  color: var(--rx-color-text);
 }
 
 .rx-tab-favicon img {
@@ -670,6 +957,67 @@ input[type='checkbox']:focus-visible {
   outline: none;
 }
 
+/*
+ * The resting address. Stacked exactly on top of the input rather than
+ * replacing it, so focus, selection and the caret all still belong to the real
+ * field -- clicking here just focuses it.
+ */
+.rx-omnibox-input[data-hidden='true'] {
+  color: transparent;
+}
+
+.rx-omnibox-display {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-2);
+  width: 100%;
+  padding: 0 var(--rx-space-3);
+  border: none;
+  border-radius: var(--rx-radius-pill);
+  background: transparent;
+  color: var(--rx-color-text-muted);
+  cursor: text;
+  text-align: left;
+  min-width: 0;
+}
+
+.rx-omnibox-display[data-security='plain'] > .rx-icon,
+.rx-omnibox-display[data-security='internal'] > .rx-icon {
+  color: var(--rx-color-text-faint);
+}
+
+.rx-omnibox-display[data-security='secure'] > .rx-icon {
+  color: var(--rx-color-success);
+}
+
+.rx-omnibox-url {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* The host is the part that must survive; the path is what gets cut. */
+.rx-omnibox-host {
+  flex: none;
+  color: var(--rx-color-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+.rx-omnibox-dim {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-omnibox-dim:first-child {
+  flex: none;
+}
+
 .rx-suggestions {
   position: absolute;
   top: calc(100% + var(--rx-space-2));
@@ -745,7 +1093,80 @@ input[type='checkbox']:focus-visible {
 .rx-palette-list {
   max-height: 46vh;
   overflow-y: auto;
-  padding: var(--rx-space-1);
+  padding: var(--rx-space-1) var(--rx-space-1) var(--rx-space-2);
+  overscroll-behavior: contain;
+}
+
+/* Groups inside the palette sit tighter than a settings section does. */
+.rx-palette-list .rx-section-title {
+  margin-block: var(--rx-space-3) var(--rx-space-1);
+  padding-inline: var(--rx-space-2);
+}
+
+.rx-palette-list > section:first-child > .rx-section-title {
+  margin-block-start: var(--rx-space-1);
+}
+
+.rx-palette-empty {
+  padding: var(--rx-space-4) var(--rx-space-3);
+  color: var(--rx-color-text-muted);
+  text-align: center;
+}
+
+/*
+ * A bounded list needs a bottom edge, or a row clipped by the max-height reads
+ * as the app having run out rather than as more to scroll.
+ */
+.rx-palette-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-3);
+  padding: var(--rx-space-2) var(--rx-space-4);
+  border-top: var(--rx-border-width) solid var(--rx-color-border);
+  font-size: var(--rx-text-n2);
+  color: var(--rx-color-text-faint);
+}
+
+/*
+ * Actions that apply to a whole panel, below a rule at the end of it. Separated
+ * because "Clear all" sitting flush against the last row is one mis-click from
+ * a list you cannot get back.
+ */
+.rx-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-2);
+  margin-top: var(--rx-space-4);
+  padding-top: var(--rx-space-3);
+  border-top: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+/* Destructive actions need a visible edge; bare red text reads as a warning. */
+.rx-button[data-variant='danger'] {
+  border-color: var(--rx-color-border);
+}
+
+.rx-button[data-variant='danger']:hover:not(:disabled) {
+  border-color: var(--rx-color-danger);
+  background: transparent;
+  color: var(--rx-color-danger);
+}
+
+/* One key chip, used by the palette and anywhere else a binding is shown. */
+.rx-kbd {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text-muted);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ *
@@ -1091,25 +1512,73 @@ input[type='checkbox']:focus-visible {
   color: var(--rx-color-text-faint);
 }
 
+/* A labelled block of chips: heading, then the chips, as one unit. */
+.rx-chat-context {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.rx-chat-context > .rx-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+  margin-block: var(--rx-space-3) var(--rx-space-2);
+}
+
+/* A count beside a section label is data, not part of the label. */
+.rx-chat-context > .rx-section-title > .rx-faint {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.rx-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-1);
+}
+
+/*
+ * A context chip is a toggle over what the model can see -- filled when on,
+ * outlined when off. Deliberately a different shape from a quick action, which
+ * is a button that fires a request; they used to be indistinguishable pills.
+ */
 .rx-context-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--rx-space-1);
+  max-width: 190px;
   padding: 2px var(--rx-space-2);
-  border: var(--rx-border-width) solid var(--rx-color-border);
-  border-radius: var(--rx-radius-pill);
+  border: var(--rx-border-width) solid transparent;
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
   font-size: var(--rx-text-n2);
-  color: var(--rx-color-text-muted);
+  color: var(--rx-color-text-faint);
   cursor: pointer;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    color var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-context-chip:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text-muted);
 }
 
 .rx-context-chip[data-on='true'] {
+  background: var(--rx-color-accent);
   border-color: var(--rx-color-accent);
-  color: var(--rx-color-text);
+  color: var(--rx-color-accent-text);
+  font-weight: var(--rx-weight-medium);
+}
+
+/* The label is what truncates; the icon and the chip's shape stay put. */
+.rx-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rx-toast {

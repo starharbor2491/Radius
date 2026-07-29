@@ -6,6 +6,7 @@ import { useUiStore } from '../store/useUiStore'
 import { bridge, send } from '../lib/bridge'
 import { Button, Field } from '../ui/primitives'
 import { KeybindingsEditor } from './KeybindingsEditor'
+import { LayoutEditor } from './LayoutEditor'
 import { ProviderDirectory } from './ProviderDirectory'
 import { BudgetControls } from './BudgetControls'
 import { RoutingEditor } from './RoutingEditor'
@@ -66,6 +67,11 @@ export function SettingsPanel(): JSX.Element {
             />
           </Field>
         </div>
+      </section>
+
+      <section>
+        <div className="rx-section-title">Layout</div>
+        <LayoutEditor />
       </section>
 
       <section>

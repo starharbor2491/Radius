@@ -25,6 +25,10 @@ import { BookmarksPanel } from './BookmarksPanel'
 export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwardedRef): JSX.Element {
   const workspace = useActiveWorkspace()
   const workspaceCount = useAppStore((store) => store.state.workspaces.length)
+  const bookmarkCount = useAppStore((store) => store.state.bookmarks.length)
+  const tabCount = useAppStore(
+    (store) => store.state.tabs.filter((tab) => tab.workspaceId === store.state.activeWorkspaceId).length
+  )
   const { sidebarOpen, sidebarWidth, setSidebarWidth, bookmarksOpen, toggleBookmarks } = useUiStore()
   const { spring } = useMotionTokens()
 
@@ -55,10 +59,10 @@ export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwa
     <div
       className="rx-glass rx-sidebar"
       data-surface="chrome"
+      data-radius-part="sidebar"
       ref={forwardedRef}
-      style={{ borderRadius: 0, borderLeft: 'none', borderTop: 'none', borderBottom: 'none' }}
     >
-      <div className="rx-rail">
+      <div className="rx-rail" data-radius-part="workspace-rail">
         <div className="rx-rail-drag" />
         <WorkspaceSwitcher />
       </div>
@@ -74,43 +78,58 @@ export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwa
             transition={spring('panel')}
             style={{ overflow: 'hidden' }}
           >
-            <div className="rx-row-between" style={{ paddingInline: 'var(--rx-space-1)' }}>
+            {/*
+              The workspace name is editable in place, so it is a real input --
+              but it should read as a heading until you click it, not as a form
+              field sitting at the top of the sidebar.
+            */}
+            <div className="rx-sidebar-header">
               <input
-                className="rx-input"
-                style={{ border: 'none', background: 'transparent', fontWeight: 'var(--rx-weight-medium)', paddingInline: 0 }}
+                className="rx-workspace-name"
                 value={workspace?.name ?? ''}
                 placeholder="Workspace"
+                aria-label="Workspace name"
                 onChange={(event) => {
                   if (workspace) {
                     send('workspaces:update', { workspaceId: workspace.id, name: event.target.value })
                   }
                 }}
               />
-              <IconButton
-                aria-label="New tab"
-                title="New tab  ⌘T"
-                onClick={() => send('tabs:create', {})}
-              >
+              <span className="rx-faint">{tabCount || ''}</span>
+              <IconButton aria-label="New tab" title="New tab" onClick={() => send('tabs:create', {})}>
                 <Icon name="plus" />
               </IconButton>
             </div>
 
             <TabStrip />
 
-            <BookmarksPanel open={bookmarksOpen} />
-
-            <div className="rx-row" style={{ flex: 'none', gap: 'var(--rx-space-1)' }}>
-              <Button onClick={toggleBookmarks}>
+            {/*
+              Bookmarks and workspace deletion both belong to the frame rather
+              than to the tab list, so they sit below a rule. The destructive one
+              is last and named, not a bare red icon beside a disclosure toggle.
+            */}
+            <div className="rx-sidebar-footer">
+              <button
+                type="button"
+                className="rx-disclosure"
+                aria-expanded={bookmarksOpen}
+                onClick={toggleBookmarks}
+              >
                 <Icon name={bookmarksOpen ? 'chevron-down' : 'chevron-right'} size={14} />
-                Bookmarks
-              </Button>
+                <span className="rx-disclosure-label">Bookmarks</span>
+                {bookmarkCount > 0 ? <span className="rx-faint">{bookmarkCount}</span> : null}
+              </button>
+
+              <BookmarksPanel open={bookmarksOpen} />
+
               {workspaceCount > 1 && workspace ? (
                 <Button
                   variant="danger"
-                  title="Delete this workspace"
+                  title={`Delete the "${workspace.name}" workspace and its tabs`}
                   onClick={() => send('workspaces:delete', { workspaceId: workspace.id })}
                 >
-                  <Icon name="trash" />
+                  <Icon name="trash" size={14} />
+                  Delete workspace
                 </Button>
               ) : null}
             </div>

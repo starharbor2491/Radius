@@ -63,7 +63,15 @@ export function HistoryPanel(): JSX.Element {
       />
 
       {entries.length === 0 ? (
-        <div className="rx-faint">{query ? 'No matches.' : 'Nothing visited yet.'}</div>
+        <div className="rx-empty">
+          <Icon name="history" size={20} />
+          <p className="rx-empty-title">{query ? 'No matches' : 'Nothing visited yet'}</p>
+          <p>
+            {query
+              ? `Nothing in your history matches “${query.trim()}”.`
+              : 'Pages you visit appear here, newest first, and stay searchable.'}
+          </p>
+        </div>
       ) : null}
 
       {grouped.map(([label, bucket]) => (
@@ -107,19 +115,22 @@ export function HistoryPanel(): JSX.Element {
         </section>
       ))}
 
-      <div className="rx-row" style={{ marginTop: 'var(--rx-space-3)' }}>
-        <Button
-          variant="outline"
-          onClick={() => send('history:clear', { sinceMs: Date.now() - 3_600_000 })}
-        >
-          <Icon name="history" size={14} />
-          Clear last hour
-        </Button>
-        <Button variant="danger" onClick={() => send('history:clear', { sinceMs: null })}>
-          <Icon name="trash" size={14} />
-          Clear all
-        </Button>
-      </div>
+      {/* Offering to clear a history that is already empty is noise. */}
+      {snapshotHistory.length > 0 ? (
+        <div className="rx-panel-actions">
+          <Button
+            variant="outline"
+            onClick={() => send('history:clear', { sinceMs: Date.now() - 3_600_000 })}
+          >
+            <Icon name="history" size={14} />
+            Clear last hour
+          </Button>
+          <Button variant="danger" onClick={() => send('history:clear', { sinceMs: null })}>
+            <Icon name="trash" size={14} />
+            Clear all
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

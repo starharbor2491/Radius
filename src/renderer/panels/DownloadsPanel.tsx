@@ -14,7 +14,11 @@ export function DownloadsPanel(): JSX.Element {
   if (downloads.length === 0) {
     return (
       <div className="rx-panel-scroll">
-        <div className="rx-faint">Nothing downloaded yet.</div>
+        <div className="rx-empty">
+          <Icon name="download" size={20} />
+          <p className="rx-empty-title">Nothing downloaded yet</p>
+          <p>Files you download appear here with their progress, and stay until you clear them.</p>
+        </div>
       </div>
     )
   }
@@ -80,10 +84,14 @@ export function DownloadsPanel(): JSX.Element {
         </motion.div>
       ))}
 
-      <Button variant="outline" onClick={() => send('downloads:clearFinished', {})}>
-        <Icon name="check" size={14} />
-        Clear finished
-      </Button>
+      {downloads.some((item) => item.state !== 'progressing' && item.state !== 'paused') ? (
+        <div className="rx-panel-actions">
+          <Button variant="outline" onClick={() => send('downloads:clearFinished', {})}>
+            <Icon name="check" size={14} />
+            Clear finished
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

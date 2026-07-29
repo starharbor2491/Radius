@@ -16,6 +16,13 @@ import type { PageContextService } from '../page/PageContextService'
 import type { DownloadService } from '../downloads/DownloadService'
 import type { AgentController } from '../agent/AgentController'
 import { DEFAULT_KEYBINDINGS } from '@shared/keybindings'
+import {
+  defaultLayout,
+  movePanel,
+  resizeRegion,
+  setActive,
+  type Layout
+} from '@shared/layout'
 import { withContext } from '../ai/context'
 
 export interface AppServices {
@@ -48,6 +55,19 @@ export function registerIpcHandlers(services: AppServices): void {
     contents: window.getView(tabId)?.webContents,
     zoom: state.getRuntime(tabId).zoom
   })
+
+  /**
+   * Applies a pure layout move to a workspace's document.
+   *
+   * Main reads the current layout, applies the function from `@shared/layout`,
+   * and stores the result -- so the same code the unit tests exercise is the
+   * code that runs, and the renderer's copy always arrives as a snapshot of
+   * what was actually persisted.
+   */
+  const editLayout = (workspaceId: string, edit: (layout: Layout) => Layout): typeof OK => {
+    state.setWorkspaceLayout(workspaceId, edit(state.getWorkspaceLayout(workspaceId)))
+    return OK
+  }
 
   const handlers: HandlerMap = {
     'state:get': () => buildState(services),
@@ -130,6 +150,16 @@ export function registerIpcHandlers(services: AppServices): void {
       state.reorderWorkspaces(orderedIds)
       return OK
     },
+
+    /* ----------------------------------------------------------- layout */
+    'layout:movePanel': ({ workspaceId, panel, region, index }) =>
+      editLayout(workspaceId, (layout) => movePanel(layout, panel, region, index)),
+    'layout:setActive': ({ workspaceId, region, panel }) =>
+      editLayout(workspaceId, (layout) => setActive(layout, region, panel)),
+    'layout:resizeRegion': ({ workspaceId, region, size }) =>
+      editLayout(workspaceId, (layout) => resizeRegion(layout, region, size)),
+    'layout:set': ({ workspaceId, layout }) => editLayout(workspaceId, () => layout),
+    'layout:reset': ({ workspaceId }) => editLayout(workspaceId, () => defaultLayout()),
 
     /* -------------------------------------------------------- bookmarks */
     'bookmarks:create': (payload) => state.createBookmark(payload),
@@ -238,8 +268,18 @@ export function registerIpcHandlers(services: AppServices): void {
       ...DEFAULT_KEYBINDINGS,
       ...state.getSetting<Record<string, string>>('keybindings', {})
     }),
-    'keybindings:set': ({ bindings }) => {
+    'keybindings:set': ({ bindings, preset }) => {
       state.setSetting('keybindings', bindings)
+      if (preset) state.setSetting('keybindingPreset', preset)
+      state.notify()
+      return OK
+    },
+    'keybindings:getPreset': () => ({
+      preset: state.getSetting<string | null>('keybindingPreset', null)
+    }),
+    // Deliberately does not touch `keybindings`: see the contract.
+    'keybindings:setPreset': ({ preset }) => {
+      state.setSetting('keybindingPreset', preset)
       state.notify()
       return OK
     },
@@ -252,10 +292,7 @@ export function registerIpcHandlers(services: AppServices): void {
       return OK
     },
     'theme:importFile': () => theme.importFromFile(),
-    'theme:exportFile': async ({ theme: next }) => {
-      await theme.exportToFile(next)
-      return OK
-    },
+    'theme:exportFile': ({ theme: next }) => theme.exportToFile(next),
 
     /* --------------------------------------------------------- settings */
     'settings:get': () => state.getAllSettings(),

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LayoutSchema } from './layout'
 
 /** Every persisted entity uses a UUID string id. */
 export const IdSchema = z.string().min(1)
@@ -33,6 +34,22 @@ export const WorkspaceSchema = z.object({
   order: z.number().int(),
   /** Theme preset id this workspace pins to, or null to follow the global theme. */
   themeId: z.string().nullable(),
+  /**
+   * A partial token document merged over whichever theme is in use while this
+   * workspace is active -- any subset of the theme shape, not just the accent.
+   * A workspace can be denser, or lighter, or drop the blur, and carries only
+   * the tokens it actually changes so it inherits every later edit to the base.
+   *
+   * Defaulted rather than required, so a state document written before this
+   * field existed still parses.
+   */
+  themeOverride: z.record(z.string(), z.unknown()).nullable().default(null),
+  /**
+   * Where this workspace's panels are docked. Prefaulted, so a workspace
+   * persisted before the layout editor existed resolves to the arrangement it
+   * already had rather than failing to parse.
+   */
+  layout: LayoutSchema,
   createdAt: z.number().int()
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>

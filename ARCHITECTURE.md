@@ -242,6 +242,118 @@ Colours are OKLCH strings. `src/shared/color.ts` implements OKLCH → linear sRG
 and WCAG contrast so the Theme Studio can warn about a failing pair — a browser's
 computed style cannot answer that question for a colour you have not applied yet.
 
+### Themes compose; they do not overwrite
+
+Three documents stack, most specific last:
+
+```
+global theme            settings.theme, one complete document
+  └── workspace.themeId        a preset the workspace pins as its base instead
+        └── workspace.themeOverride   a partial document, any subset of tokens
+              └── workspace.accent    unless the override already names one
+```
+
+Merging happens on the **document**, not on resolved CSS variables, and the
+result goes back through `ThemeSchema`. That is what makes an override safe to
+store loosely: a workspace can name a token this build has never heard of, or a
+value out of range, and the merge reports it (`resolveThemeOverride` returns the
+issues) instead of painting something wrong. A broken override leaves the base
+theme visible rather than a broken window.
+
+A workspace stores the *difference* from its base, never a copy of it —
+`themeOverrideDiff` is applied on every write. A workspace that wanted a denser
+layout carries two tokens and inherits every later edit to the other ninety.
+
+### A theme file is a partial document
+
+`.radius-theme.json` round-trips through the same schema in both directions.
+Export writes the resolved document because it is meant to be readable; import
+accepts anything from that down to two tokens, which is what `.prefault({})` on
+every nested object buys.
+
+Import returns a *report*, not a theme-or-null. "Invalid theme" is useless to
+someone hand-editing JSON, so `parseThemeDocument` keeps zod's path and the
+studio prints `glass.chrome.blur — Too big: expected number to be <=200`. A file
+that parses reports how many tokens it actually named, so a three-line theme
+says three rather than implying it set the ninety it resolved to.
+
+Both directions live in main (`ThemeService`): file dialogs are a main-process
+capability. Import deliberately does not apply what it read — the renderer holds
+the "what was in use before" that the gallery's revert needs, so importing is a
+read and applying is the same `theme:set` any other edit takes.
+
+### The gallery previews with the real engine
+
+`resolveThemeVars` is pure and returns nothing but custom properties, so setting
+its output on an element instead of on `:root` renders a second complete theme
+inside the first. A gallery card is not a picture of a theme; it is the same
+token engine scoped to a box, which is why a dense preset previews dense and one
+with no blur previews flat.
+
+Hovering a card applies it to the whole window anyway, because a 150px
+miniature cannot tell you whether a theme is comfortable to read a tab strip in.
+Nothing persists until the card is clicked, and the header keeps a way back to
+what was in use when the gallery opened — a live preview is only honest if
+leaving it is free.
+
+### User CSS, and the `data-radius-part` contract
+
+User CSS is the one place a person hands Radius something free-form. It is CSS,
+it is injected into the **chrome view only** — never into a page view — and it
+is never evaluated as script. It is applied by assigning `textContent` on one
+`<style>` element, so it cannot introduce markup, and `sanitizeUserCss` strips
+`@import` and remote `url()` (a theme is a local document; picking a colour
+should not make a network request) along with the legacy script-in-CSS vectors.
+Everything stripped is reported at the editor rather than dropped silently, and
+the document keeps what the user typed so they can fix it.
+
+What that CSS aims at is a stable name. Class names are not one — `rx-tab` is an
+implementation detail of the stylesheet and a refactor may rename it. These
+attributes are the promise instead, listed in `src/renderer/theme/parts.ts` and
+pinned by `tests/theme-parts.test.ts`, which fails if one is documented but not
+rendered:
+
+| `data-radius-part` | What it marks |
+|---|---|
+| `shell` | The chrome's root element |
+| `sidebar` | The whole left sidebar |
+| `workspace-rail` | The icon rail inside the sidebar |
+| `workspace-chip` | One workspace button in the rail |
+| `tab-strip` | The scrolling list of tabs |
+| `tab` | One tab row |
+| `toolbar` | The top bar holding navigation and the omnibox |
+| `omnibox` | The address field and its display state |
+| `find-bar` | Find in page |
+| `panel` | The body of a docked panel |
+| `panel-header` | That panel's title row |
+| `panel-title` | The title text itself |
+| `command-palette` | The command palette surface |
+| `button` | Every text button |
+| `icon-button` | Every icon-only button |
+| `field` | A labelled control |
+| `field-label` | That control's label |
+| `slider` | Every range input bound to a token |
+| `toast` | The transient message |
+| `glass` | Any glass surface (pair with `data-surface`) |
+| `theme-gallery` | The gallery section |
+| `theme-card` | One preset card |
+
+Adding a part is additive and cheap. Removing or renaming one breaks every theme
+a user has written, so it takes the same care as changing an IPC channel.
+
+### Contrast is reported, never corrected
+
+`auditThemeContrast` grades the six pairs the chrome actually renders — body
+text on a panel and on the window backdrop, muted and faint text, a label on an
+accent button, and the accent against a panel — each against the WCAG threshold
+that applies to it (4.5:1 for text, 3:1 for hint text and for non-text UI under
+1.4.11).
+
+A failing pair is named at the control that causes it, with the measured ratio
+and the rule it missed. Nothing is silently nudged into range: a user who wants
+a low-contrast theme gets one and is told what it costs. Gallery cards carry the
+same badge, and no shipped preset fails its own check — a test asserts that.
+
 ## The agent
 
 The assistant can drive a page. Three decisions make it work:

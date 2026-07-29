@@ -1,0 +1,156 @@
+/*
+ * Chords, the keybinding editor's rows, and the preset sets.
+ *
+ * See app.css for the no-literal-values rule: every value here must read a
+ * --rx-* custom property. The base `.rx-keycap` lives in app.css; what follows
+ * only adds what chords and preset sets need.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Pending-chord indicator
+ * ------------------------------------------------------------------ */
+
+.rx-chord-indicator {
+  position: fixed;
+  left: 50%;
+  bottom: var(--rx-space-6);
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-3);
+  max-width: calc(100% - var(--rx-space-8));
+  padding: var(--rx-space-2) var(--rx-space-4);
+  border-radius: var(--rx-radius-pill);
+  font-size: var(--rx-text-n1);
+  color: var(--rx-color-text);
+}
+
+.rx-chord-typed {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+}
+
+.rx-chord-caret {
+  color: var(--rx-color-accent);
+  font-weight: var(--rx-weight-bold);
+}
+
+.rx-chord-key {
+  display: inline-block;
+  min-width: var(--rx-space-5);
+  padding: 0 var(--rx-space-1);
+  border: var(--rx-border-width) solid var(--rx-color-border-strong);
+  border-bottom-width: calc(var(--rx-border-width) * 2);
+  border-radius: var(--rx-radius-sm);
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n2);
+  line-height: var(--rx-line-height);
+  text-align: center;
+}
+
+.rx-chord-candidates {
+  display: flex;
+  align-items: center;
+  gap: var(--rx-space-3);
+  overflow: hidden;
+  color: var(--rx-color-text-muted);
+  white-space: nowrap;
+}
+
+.rx-chord-candidate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rx-space-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ *
+ * Editor rows
+ * ------------------------------------------------------------------ */
+
+.rx-keybind-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+}
+
+.rx-keybind-controls {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--rx-space-1);
+}
+
+/* A chord earns a second border so it reads as a sequence, not a combination. */
+.rx-keycap[data-chord='true'] {
+  border-left-width: calc(var(--rx-border-width) * 3);
+  border-left-color: var(--rx-color-accent);
+  letter-spacing: var(--rx-tracking-tight);
+}
+
+.rx-keycap-clear {
+  padding: 0 var(--rx-space-2);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-sm);
+  background: transparent;
+  color: var(--rx-color-text-faint);
+  font-family: var(--rx-font-mono);
+  font-size: var(--rx-text-n1);
+  cursor: pointer;
+}
+
+.rx-keycap-clear:hover:not(:disabled) {
+  border-color: var(--rx-color-danger);
+  color: var(--rx-color-danger);
+}
+
+.rx-keycap-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rx-keybind-conflict {
+  color: var(--rx-color-warning);
+  font-size: var(--rx-text-n2);
+  padding-left: var(--rx-space-1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Preset sets
+ * ------------------------------------------------------------------ */
+
+.rx-keybind-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-1);
+}
+
+.rx-keybind-set {
+  padding: var(--rx-space-1) var(--rx-space-3);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-2);
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
+  cursor: pointer;
+}
+
+.rx-keybind-set:hover {
+  border-color: var(--rx-color-accent);
+  color: var(--rx-color-text);
+}
+
+.rx-keybind-set[data-active='true'] {
+  border-color: var(--rx-color-accent);
+  background: var(--rx-color-accent);
+  color: var(--rx-color-accent-text);
+}
+
+.rx-keybind-note {
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n2);
+}

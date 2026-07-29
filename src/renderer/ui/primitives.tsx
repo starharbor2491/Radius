@@ -16,7 +16,12 @@ interface GlassProps extends HTMLAttributes<HTMLDivElement> {
  */
 export function Glass({ surface = 'panel', className, children, ...rest }: GlassProps): JSX.Element {
   return (
-    <div {...rest} data-surface={surface} className={['rx-glass', className].filter(Boolean).join(' ')}>
+    <div
+      {...rest}
+      data-surface={surface}
+      data-radius-part="glass"
+      className={['rx-glass', className].filter(Boolean).join(' ')}
+    >
       {children}
     </div>
   )
@@ -34,6 +39,7 @@ export function Button({ variant = 'ghost', className, ...rest }: ButtonProps): 
       {...(rest as object)}
       type={rest.type ?? 'button'}
       data-variant={variant}
+      data-radius-part="button"
       className={['rx-button', className].filter(Boolean).join(' ')}
       whileTap={when({ scale: 0.96 }, {})}
       transition={spring('press')}
@@ -52,6 +58,7 @@ export function IconButton({
       {...(rest as object)}
       type={rest.type ?? 'button'}
       data-active={active ? 'true' : 'false'}
+      data-radius-part="icon-button"
       className={['rx-icon-button', className].filter(Boolean).join(' ')}
       whileHover={when({ scale: 1.08 }, {})}
       whileTap={when({ scale: 0.92 }, {})}
@@ -62,8 +69,10 @@ export function IconButton({
 
 export function Field({ label, children }: { label: string; children: ReactNode }): JSX.Element {
   return (
-    <label className="rx-field">
-      <span className="rx-label">{label}</span>
+    <label className="rx-field" data-radius-part="field">
+      <span className="rx-label" data-radius-part="field-label">
+        {label}
+      </span>
       {children}
     </label>
   )
@@ -102,6 +111,7 @@ export function Slider({
       </div>
       <input
         className="rx-slider"
+        data-radius-part="slider"
         type="range"
         min={min}
         max={max}
@@ -134,6 +144,7 @@ export function Toast({ message }: { message: string | null }): JSX.Element {
         <motion.div
           key={message}
           className="rx-glass rx-toast"
+          data-radius-part="toast"
           data-surface="popover"
           initial={{ opacity: 0, y: 12, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}

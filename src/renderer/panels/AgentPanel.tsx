@@ -12,6 +12,7 @@ import { useActiveTab } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
 import { useTheme } from '../theme/ThemeProvider'
+import { Icon } from '../ui/Icon'
 import { ModelPicker, useSelectableProviders, type ModelSelection } from '../ui/ModelPicker'
 import { Button } from '../ui/primitives'
 
@@ -200,8 +201,10 @@ export function AgentPanel(): JSX.Element {
   if (usableProviders.length === 0) {
     return (
       <div className="rx-chat">
-        <div className="rx-faint">
-          The agent needs a model. Every provider is listed in Settings — paste a key into one.
+        <div className="rx-empty">
+          <Icon name="key" size={20} />
+          <p className="rx-empty-title">The agent needs a model</p>
+          <p>Every provider is listed in Settings — paste a key into any one of them.</p>
         </div>
       </div>
     )
@@ -220,15 +223,31 @@ export function AgentPanel(): JSX.Element {
             ? runState === 'thinking'
               ? 'Reading the page…'
               : 'Acting — watch the cursor'
-            : 'Its cursor appears on the page while it works. Stop any time.'}
+            : 'Idle. Its cursor appears on the page as soon as it starts.'}
         </span>
       </div>
 
       <div className="rx-chat-log" ref={logRef}>
         {steps.length === 0 && !busy ? (
-          <div className="rx-faint">
-            Give it something to do on this page — “find the pricing and tell me the cheapest plan”,
-            “fill in the search box with my query”.
+          <div className="rx-empty">
+            <Icon name="agent" size={20} />
+            <p className="rx-empty-title">Give it something to do on this page</p>
+            <p>
+              “Find the pricing and tell me the cheapest plan”. “Fill in the search box with my
+              query”.
+            </p>
+            {/*
+              The safety properties are the most important thing on this screen
+              and they used to be the least visible -- one faint grey line above
+              an equally faint grey hint. They are the reason the feature is
+              usable, so they are stated, not whispered.
+            */}
+            <ul className="rx-guarantees">
+              <li>Its cursor is drawn on the page the whole time, so you can see every move.</li>
+              <li>It stops after {MAX_AGENT_STEPS} steps, whatever the model asks for.</li>
+              <li>Stop cancels mid-action.</li>
+              <li>It will not enter credentials, payment details, or complete a checkout.</li>
+            </ul>
           </div>
         ) : null}
 

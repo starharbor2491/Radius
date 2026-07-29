@@ -96,6 +96,11 @@ defaults. Get this wrong and a three-line `.radius-theme.json` fails to parse.
 
 ## Conventions
 
+`DESIGN.md` is the rule set the chrome follows — four type roles, one spacing
+rhythm, four surfaces, five interactive states, and the content rules (truncate,
+group, style the scrollbar, format accelerators per platform). A component that
+breaks one of those is a bug in the component, not a matter of taste.
+
 **No literal values in the stylesheet.** `src/renderer/styles/app.css` reads
 only `--rx-*` custom properties. That single constraint is what lets the whole
 chrome retheme with no rebuild and no reload. If you need a new colour or
