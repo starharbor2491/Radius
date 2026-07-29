@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import type { Tab, TabGroup } from '@shared/types'
 import { TAB_GROUP_COLORS } from '@shared/types'
@@ -225,6 +225,21 @@ function TabItem({
 }: TabItemProps): JSX.Element {
   const { spring, when } = useMotionTokens()
 
+  /*
+   * A favicon that will not load falls back to the host initial through state,
+   * never by taking the node out of the DOM.
+   *
+   * This used to be `onError={(event) => event.currentTarget.remove()}`, which
+   * detaches a node React still believes it owns. The next render that replaced
+   * the image -- the spinner going up on the *following* navigation -- called
+   * `removeChild` on a node whose parent was already null, threw
+   * `NotFoundError`, and unmounted the entire chrome. Two navigations in one
+   * tab with an unloadable favicon was enough; `npm run smoke:app` only ever
+   * navigated once, so nothing caught it.
+   */
+  const [faviconFailed, setFaviconFailed] = useState(false)
+  useEffect(() => setFaviconFailed(false), [tab.faviconUrl])
+
   return (
     <motion.div
       ref={(node) => register(tab.id, node)}
@@ -257,8 +272,8 @@ function TabItem({
       <span className="rx-tab-favicon" style={groupColorVar ? { color: groupColorVar } : undefined}>
         {tab.loading ? (
           <Spinner />
-        ) : tab.faviconUrl ? (
-          <img src={tab.faviconUrl} alt="" onError={(event) => event.currentTarget.remove()} />
+        ) : tab.faviconUrl && !faviconFailed ? (
+          <img src={tab.faviconUrl} alt="" onError={() => setFaviconFailed(true)} />
         ) : (
           <span>{(displayHost(tab.url)[0] ?? '·').toUpperCase()}</span>
         )}

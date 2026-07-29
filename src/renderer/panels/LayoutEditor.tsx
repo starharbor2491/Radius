@@ -1,7 +1,7 @@
 import { useMemo, useState, type JSX } from 'react'
 import { motion } from 'motion/react'
 import {
-  PANEL_TITLES,
+  PANEL_NAMES,
   REGION_AXIS,
   REGION_BOUNDS,
   REGION_IDS,
@@ -158,14 +158,14 @@ function RegionRow({ region, layout, onMove, onResize, onToggle }: RegionRowProp
 
       {slice.panels.map((panel) => (
         <div key={panel} className="rx-layout-panel" data-open={isPanelOpen(layout, panel) ? 'true' : 'false'}>
-          <span className="rx-layout-panel-name">{PANEL_TITLES[panel]}</span>
+          <span className="rx-layout-panel-name">{PANEL_NAMES[panel]}</span>
           <div className="rx-row">
             <Button onClick={() => onToggle(panel)}>
               {slice.active === panel ? 'Hide' : 'Show'}
             </Button>
             <select
               className="rx-input"
-              aria-label={`Dock ${PANEL_TITLES[panel]} in`}
+              aria-label={`Dock ${PANEL_NAMES[panel]} in`}
               value={region}
               onChange={(event) => onMove(panel, event.target.value as RegionId)}
             >

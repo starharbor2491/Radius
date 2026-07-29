@@ -230,7 +230,7 @@ export function ThemeStudio(): JSX.Element {
             onChange={(pageInset) => update({ geometry: { pageInset } })}
           />
           <Ramp
-            label="Page corner radius"
+            label="Page radius"
             suffix="px"
             min={0}
             max={40}
@@ -253,7 +253,7 @@ export function ThemeStudio(): JSX.Element {
             </select>
           </Field>
           <Ramp
-            label="Base text size"
+            label="Text size"
             suffix="px"
             min={10}
             max={20}
@@ -285,7 +285,7 @@ export function ThemeStudio(): JSX.Element {
             onChange={(scale) => update({ motion: { scale } })}
           />
           <Ramp
-            label="Tab drag stiffness"
+            label="Drag stiffness"
             min={100}
             max={1200}
             step={10}
@@ -293,7 +293,7 @@ export function ThemeStudio(): JSX.Element {
             onChange={(stiffness) => update({ motion: { springs: { tabDrag: { stiffness } } } })}
           />
           <Ramp
-            label="Tab drag damping"
+            label="Drag damping"
             min={5}
             max={80}
             value={theme.motion.springs.tabDrag.damping}

@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
+  PANEL_NAMES,
   PANEL_TITLES,
   REGION_AXIS,
   REGION_BOUNDS,
@@ -42,6 +43,9 @@ import { ChordIndicator } from './ui/ChordIndicator'
 
 /** How far the pointer must travel before a header press becomes a drag. */
 const DRAG_THRESHOLD = 5
+
+/** The page never gets dragged smaller than this by a dock's resize handle. */
+const MIN_VIEWPORT = 240
 
 /**
  * The chrome shell.
@@ -209,9 +213,19 @@ function Dock({ region, layout, hostRef }: DockProps): JSX.Element {
       const direction = region === 'left' ? 1 : -1
       let frame = 0
 
+      /*
+       * How far this edge can travel before the page has nowhere left to go.
+       * Measured from the viewport that is actually on screen rather than
+       * computed from the document, because the sidebar and the other docks all
+       * take a share and only the DOM knows what each of them ended up with.
+       */
+      const room = document.querySelector('.rx-viewport')?.getBoundingClientRect()
+      const spare = (axis === 'width' ? (room?.width ?? 0) : (room?.height ?? 0)) - MIN_VIEWPORT
+      const ceiling = startSize + Math.max(0, spare)
+
       const onMove = (moveEvent: PointerEvent): void => {
         const current = axis === 'width' ? moveEvent.clientX : moveEvent.clientY
-        const next = startSize + direction * (current - start)
+        const next = Math.min(ceiling, startSize + direction * (current - start))
         if (frame) return
         frame = window.requestAnimationFrame(() => {
           frame = 0
@@ -267,7 +281,9 @@ function Dock({ region, layout, hostRef }: DockProps): JSX.Element {
 
       const onUp = (): void => finish(true)
       const onKey = (keyEvent: KeyboardEvent): void => {
-        if (keyEvent.key !== 'Escape') return
+        // Only swallow Escape once the press has actually become a drag --
+        // holding the mouse on a header must not stop Escape closing a palette.
+        if (keyEvent.key !== 'Escape' || !dragging) return
         keyEvent.preventDefault()
         keyEvent.stopPropagation()
         finish(false)
@@ -282,7 +298,7 @@ function Dock({ region, layout, hostRef }: DockProps): JSX.Element {
   )
 
   return (
-    <>
+    <AnimatePresence initial={false}>
       {active ? (
         <motion.div
           key={`dock-${region}`}
@@ -311,7 +327,7 @@ function Dock({ region, layout, hostRef }: DockProps): JSX.Element {
               <div
                 className="rx-dock-grab"
                 onPointerDown={startPanelDrag}
-                title={`Drag to move ${PANEL_TITLES[active]} to another dock`}
+                title={`Drag to move ${PANEL_NAMES[active]} to another dock`}
               >
                 <Icon name="list" size={13} />
                 <span className="rx-panel-title" data-radius-part="panel-title">
@@ -327,7 +343,7 @@ function Dock({ region, layout, hostRef }: DockProps): JSX.Element {
           </div>
         </motion.div>
       ) : null}
-    </>
+    </AnimatePresence>
   )
 }
 
@@ -410,7 +426,7 @@ function DropZones({ layout }: { layout: Layout }): JSX.Element | null {
               >
                 <span className="rx-drop-label">
                   {REGION_TITLES[region]}
-                  {dropRegion === region ? ` · ${PANEL_TITLES[dragPanel]}` : ''}
+                  {dropRegion === region ? ` · ${PANEL_NAMES[dragPanel]}` : ''}
                 </span>
               </motion.div>
             )

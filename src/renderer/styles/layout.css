@@ -32,19 +32,38 @@ body .rx-shell > .rx-sidebar {
   flex: none;
 }
 
+/*
+ * The floor that makes the docks give ground.
+ *
+ * Flexbox honours `min-width` while shrinking, so a layout asking for more
+ * room than the window has takes it out of the docks rather than out of the
+ * page. Without it, `.rx-main` collapses to nothing and the toolbar overflows
+ * across whatever dock is next to it.
+ */
 body .rx-main {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: var(--rx-viewport-min);
 }
 
 /* ------------------------------------------------------------------ *
  * A dock region
  * ------------------------------------------------------------------ */
 
+/*
+ * `flex-shrink: 1` rather than `flex: none`.
+ *
+ * A layout restored onto a smaller screen -- or two generous docks on one
+ * window -- can ask for more room than there is. An unshrinkable dock would
+ * overflow the window and paint over the toolbar; a shrinkable one gives ground
+ * instead, and because main is told what was *measured* rather than what was
+ * asked for, the page view still lands exactly beside it.
+ */
 .rx-dock {
   position: relative;
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
   /* The page view butts right up against these, so square them off. */
   border-radius: 0;
 }

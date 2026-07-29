@@ -49,6 +49,11 @@ export const REGION_IDS = ['left', 'right', 'bottom'] as const
 export type RegionId = (typeof REGION_IDS)[number]
 export const RegionIdSchema = z.enum(REGION_IDS)
 
+/**
+ * What a panel calls itself at the top of its own dock.
+ *
+ * These can be a phrase, because there is a whole panel header to hold one.
+ */
 export const PANEL_TITLES: Record<PanelId, string> = {
   ai: 'Assistant',
   agent: 'Working alongside you',
@@ -57,6 +62,23 @@ export const PANEL_TITLES: Record<PanelId, string> = {
   history: 'History',
   downloads: 'Downloads',
   usage: 'AI usage and budget'
+}
+
+/**
+ * What a panel is called in a list.
+ *
+ * A title that reads well as a header does not survive a table row: the layout
+ * editor was showing "Working alongsid…" and "AI usage and bu…" next to a
+ * control, which tells you neither what the panel is nor what the control does.
+ */
+export const PANEL_NAMES: Record<PanelId, string> = {
+  ai: 'Assistant',
+  agent: 'Agent',
+  settings: 'Settings',
+  theme: 'Theme',
+  history: 'History',
+  downloads: 'Downloads',
+  usage: 'Usage'
 }
 
 export const REGION_TITLES: Record<RegionId, string> = {

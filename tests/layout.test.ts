@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   LayoutSchema,
   PANEL_IDS,
+  PANEL_NAMES,
   REGION_BOUNDS,
   REGION_IDS,
   clampRegionSize,
@@ -259,5 +260,15 @@ describe('layoutSignature', () => {
     // the chrome's footprint, so the inset measurement must not be rebuilt.
     const reordered: Layout = movePanel(defaultLayout(), 'usage', 'right', 0)
     expect(layoutSignature(reordered)).toBe(layoutSignature(defaultLayout()))
+  })
+
+  it('gives every panel a list name short enough to survive a table row', () => {
+    for (const panel of PANEL_IDS) {
+      const name = PANEL_NAMES[panel]
+      expect(name, panel).toBeTruthy()
+      // The layout editor renders these beside a control in a narrow dock.
+      // "Working alongside you" became "Working alongsid…", which names nothing.
+      expect(name.length, `${panel} -> ${name}`).toBeLessThanOrEqual(12)
+    }
   })
 })

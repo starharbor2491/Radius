@@ -67,12 +67,29 @@ Still open:
 
 ## M3 — Customization surfaces
 
-- Layout editor: dockable regions (`top`/`bottom`/`left`/`right`/`floating`),
-  drag-and-drop panels, per-workspace layout presets
-- Chord bindings (`g` `t`) and Radius/Vim/Arc/Chrome preset sets on top of the
-  existing remapper
-- Theme gallery and a documented `data-radius-part` contract for user CSS
-- Per-workspace theme overrides beyond the accent
+Done:
+
+- Layout editor: dockable `left`/`right`/`bottom` regions, drag-and-drop panels
+  with visible drop targets, per-workspace layouts that survive a restart
+- Chord bindings (`g` `t`) driven by a pure matcher state machine, with
+  Radius/Vim/Arc/Chrome preset sets and chord-aware conflict detection
+- Theme gallery whose cards are real miniature chromes rendered by the token
+  engine, `.radius-theme.json` import and export with per-field error reporting,
+  and user CSS against a documented 22-name `data-radius-part` contract
+- Per-workspace theme overrides across the whole document, stored as a diff so a
+  workspace inherits later edits to the base
+- Contrast reported at the control against the threshold that applies, never
+  silently corrected
+- `DESIGN.md`: the rules the chrome follows, so a component that breaks one is a
+  bug rather than a matter of taste
+
+Still open:
+
+- Reordering panels *within* a region (the document supports it; there is no
+  gesture)
+- `top` and `floating` regions — see `ARCHITECTURE.md` for why both were left out
+- Three-step chords: the matcher is length-agnostic but the capture UI stops at
+  two
 
 ## M4 — Motion pass
 

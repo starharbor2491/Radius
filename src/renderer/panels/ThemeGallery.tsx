@@ -1,5 +1,10 @@
 import { useMemo, useState, type CSSProperties, type JSX } from 'react'
-import { failingContrast, resolveThemeVars, type Theme } from '@shared/theme'
+import {
+  failingContrast,
+  flattenThemeOverride,
+  resolveThemeVars,
+  type Theme
+} from '@shared/theme'
 import { useTheme } from '../theme/ThemeProvider'
 import { part } from '../theme/parts'
 import { Icon } from '../ui/Icon'
@@ -47,12 +52,17 @@ export function ThemePreview({ theme }: { theme: Theme }): JSX.Element {
  * Nothing is persisted until the card is clicked, and the header keeps a way
  * back to whatever was in use when the gallery was opened -- live preview is
  * only honest if leaving is free.
+ *
+ * The cards themselves show each preset as its author wrote it, not as this
+ * workspace would render it: an override that repaints every card the same
+ * accent would make the grid useless for choosing. The difference is stated
+ * under the grid instead.
  */
 export function ThemeGallery(): JSX.Element {
   const {
     presets,
     baseTheme,
-    compose,
+    workspaceOverride,
     applyTheme,
     applyPreset,
     previewTheme,
@@ -70,6 +80,7 @@ export function ThemeGallery(): JSX.Element {
   )
 
   const activeId = scope === 'workspace' ? workspaceThemeId : baseTheme.id
+  const overrideCount = flattenThemeOverride(workspaceOverride).length
 
   return (
     <section {...part('theme-gallery')}>
@@ -92,8 +103,7 @@ export function ThemeGallery(): JSX.Element {
 
       <div className="rx-gallery-grid" onMouseLeave={() => previewTheme(null)}>
         {presets.map((preset) => {
-          const composed = compose(preset)
-          const failing = failingContrast(composed)
+          const failing = failingContrast(preset)
           return (
             <button
               key={preset.id}
@@ -107,7 +117,7 @@ export function ThemeGallery(): JSX.Element {
               onBlur={() => previewTheme(null)}
               onClick={() => applyPreset(preset.id)}
             >
-              <ThemePreview theme={composed} />
+              <ThemePreview theme={preset} />
               <span className="rx-theme-card-meta">
                 <span className="rx-theme-card-name">
                   {preset.name}
@@ -133,6 +143,19 @@ export function ThemeGallery(): JSX.Element {
             ? 'Clicking pins a preset as this workspace’s base theme.'
             : 'Hover to try a theme on the whole window; click to keep it.'}
       </span>
+
+      {/*
+        A card previews the preset as its author wrote it. The window preview on
+        hover shows the truth, which is the preset with this workspace's
+        override still on top of it -- so when those differ, say so rather than
+        letting the cards quietly promise something they will not deliver.
+      */}
+      {overrideCount > 0 ? (
+        <span className="rx-faint rx-gallery-hint">
+          This workspace overrides {overrideCount} token{overrideCount === 1 ? '' : 's'}, which
+          stays on top of whichever theme you pick.
+        </span>
+      ) : null}
     </section>
   )
 }

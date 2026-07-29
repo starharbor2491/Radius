@@ -401,7 +401,7 @@ textarea {
  * what actually communicates "not now".
  */
 .rx-button:disabled {
-  opacity: 0.55;
+  opacity: var(--rx-opacity-disabled);
   cursor: not-allowed;
 }
 
@@ -507,7 +507,7 @@ textarea {
 }
 
 .rx-icon-button:disabled {
-  opacity: 0.4;
+  opacity: var(--rx-opacity-disabled);
   cursor: default;
   background: transparent;
 }
@@ -811,7 +811,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .rx-tab[data-suspended='true'] .rx-tab-title {
-  opacity: 0.55;
+  opacity: var(--rx-opacity-disabled);
 }
 
 .rx-tab[data-dragging='true'] {
@@ -1069,7 +1069,7 @@ input[type='checkbox']:focus-visible {
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  background: oklch(0 0 0 / 0.28);
+  background: var(--rx-color-scrim);
 }
 
 .rx-palette {
@@ -1362,44 +1362,8 @@ input[type='checkbox']:focus-visible {
 }
 
 .rx-slider:disabled {
-  opacity: 0.4;
+  opacity: var(--rx-opacity-disabled);
   cursor: not-allowed;
-}
-
-.rx-swatch-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: var(--rx-space-2);
-}
-
-.rx-preset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--rx-space-1);
-  padding: var(--rx-space-2);
-  border: var(--rx-border-width) solid var(--rx-color-border);
-  border-radius: var(--rx-radius-md);
-  cursor: pointer;
-  background: transparent;
-  color: var(--rx-color-text-muted);
-  text-align: left;
-}
-
-.rx-preset[data-active='true'] {
-  border-color: var(--rx-color-accent);
-  color: var(--rx-color-text);
-}
-
-.rx-preset-swatches {
-  display: flex;
-  gap: 3px;
-}
-
-.rx-preset-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--rx-radius-sm);
-  border: 1px solid var(--rx-color-border);
 }
 
 /* ------------------------------------------------------------------ *
@@ -1663,7 +1627,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .rx-quick-action:disabled {
-  opacity: 0.4;
+  opacity: var(--rx-opacity-disabled);
   cursor: not-allowed;
 }
 
@@ -1730,7 +1694,7 @@ input[type='checkbox']:focus-visible {
 }
 
 .rx-directory-row[data-blocked='true'] {
-  opacity: 0.55;
+  opacity: var(--rx-opacity-disabled);
 }
 
 .rx-directory-body {

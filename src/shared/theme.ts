@@ -158,7 +158,15 @@ export const GeometryTokensSchema = z
     /** Gap between the chrome and the inset page view, in px. */
     pageInset: z.number().min(0).max(64).default(8),
     /** Corner radius applied to the page view itself. */
-    pageRadius: z.number().min(0).max(48).default(12)
+    pageRadius: z.number().min(0).max(48).default(12),
+    /**
+     * The narrowest the page is allowed to get, in px.
+     *
+     * A floor rather than a preference: docked panels shrink to respect it, so
+     * a layout carried onto a smaller screen gives ground in the chrome instead
+     * of squeezing the web page down to nothing.
+     */
+    viewportMin: z.number().min(0).max(800).default(240)
   })
   .prefault({})
 export type GeometryTokens = z.infer<typeof GeometryTokensSchema>
@@ -782,6 +790,7 @@ export function resolveThemeVars(theme: Theme): Record<string, string> {
   vars['--rx-density'] = String(density)
   vars['--rx-opacity-disabled'] = String(geometry.disabledOpacity)
   vars['--rx-page-inset'] = `${geometry.pageInset}px`
+  vars['--rx-viewport-min'] = `${geometry.viewportMin}px`
   vars['--rx-page-radius'] = `${geometry.pageRadius}px`
   for (let step = 1; step <= 12; step += 1) {
     vars[`--rx-space-${step}`] = `${Math.round(geometry.spaceUnit * step * density)}px`

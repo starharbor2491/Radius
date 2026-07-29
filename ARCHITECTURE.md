@@ -250,8 +250,15 @@ Three documents stack, most specific last:
 global theme            settings.theme, one complete document
   └── workspace.themeId        a preset the workspace pins as its base instead
         └── workspace.themeOverride   a partial document, any subset of tokens
-              └── workspace.accent    unless the override already names one
 ```
+
+`workspace.accent` is deliberately *not* in that chain, though it used to be. It
+is the workspace's identity colour in the rail, assigned at creation from a
+rotating palette — nobody chose it. While it masked the theme's accent, applying
+a theme never changed the accent, which made a gallery of previews lie about
+what its presets look like. A workspace that wants a different accent overrides
+`colors.accent` like any other token; the studio writes the chip colour to match
+when it does.
 
 Merging happens on the **document**, not on resolved CSS variables, and the
 result goes back through `ThemeSchema`. That is what makes an override safe to
@@ -353,6 +360,37 @@ A failing pair is named at the control that causes it, with the measured ratio
 and the rule it missed. Nothing is silently nudged into range: a user who wants
 a low-contrast theme gets one and is told what it costs. Gallery cards carry the
 same badge, and no shipped preset fails its own check — a test asserts that.
+
+## The layout system
+
+The chrome is not a fixed frame. `src/shared/layout.ts` holds a zod-validated
+document naming three regions — `left`, `right`, `bottom` — each with an ordered
+panel list, which panel is active, and a size. Panels are dragged between
+regions by their title bar, and the arrangement is stored **per workspace**, so
+a research workspace and a writing workspace can be shaped differently.
+
+The default document puts all seven panels in `right` with none active, which
+reproduces the previously hardcoded chrome exactly. A workspace persisted before
+the layout editor existed parses through `parseLayout` rather than arriving as
+`undefined`.
+
+Two constraints deserve stating, because both are consequences of the z-order:
+
+- **Every region has to be measured.** Main places the page view from insets the
+  renderer reports; a region main does not know about is a region the page view
+  covers. `reportInsets` measures the bottom dock's height and the left dock's
+  width alongside the sidebar, and effects key on `layoutSignature` so a favicon
+  landing does not restart inset polling.
+- **Dragging enters overlay mode.** The left and bottom drop targets sit over
+  ground the page view owns, so without raising the chrome the user would be
+  dragging toward an invisible target.
+
+`top` and `floating` are deliberately absent. The toolbar is not a panel — it is
+the window's own furniture, and a floating region needs a window manager's worth
+of behaviour (focus, stacking, off-screen recovery) to not be a trap.
+
+Reordering panels *within* a region is supported by the document and the pure
+functions but has no gesture yet; only whole-region drops are wired.
 
 ## The agent
 

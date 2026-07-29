@@ -138,6 +138,11 @@
   color: var(--rx-color-text-faint);
   font-size: var(--rx-text-n1);
   line-height: var(--rx-line-height);
+  /* Cards in a row stay the same height whatever the description runs to. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ------------------------------------------------------------------ *
@@ -394,7 +399,11 @@
  * User CSS
  * ------------------------------------------------------------------ */
 
-.rx-css-editor {
+/*
+ * Wins over `.rx-textarea`'s own min-height: app.css imports this file at the
+ * top, so at equal specificity app.css would come last.
+ */
+textarea.rx-css-editor {
   min-height: calc(var(--rx-space-12) * 2.5);
   font-family: var(--rx-font-mono);
   font-size: var(--rx-text-n1);
@@ -510,7 +519,7 @@
 /* Label, track and value on one row -- the studio has more labels than content. */
 .rx-ramp {
   display: grid;
-  grid-template-columns: calc(var(--rx-space-12) * 1.4) 1fr calc(var(--rx-space-12));
+  grid-template-columns: calc(var(--rx-space-12) * 2.2) 1fr calc(var(--rx-space-12) * 0.9);
   align-items: center;
   gap: var(--rx-space-2);
 }
@@ -518,6 +527,9 @@
 .rx-ramp-label {
   color: var(--rx-color-text-muted);
   font-size: var(--rx-text-n1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rx-ramp-value {

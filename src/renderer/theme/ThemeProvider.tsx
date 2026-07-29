@@ -44,11 +44,6 @@ interface ThemeContextValue {
   previewTheme: (theme: Theme | null) => void
   /** True while a preview is on screen, so surfaces can say the view is not real. */
   previewing: boolean
-  /**
-   * Runs a candidate base theme through the workspace's override and accent, so
-   * a gallery card shows what clicking it will actually produce.
-   */
-  compose: (source: Theme) => Theme
   scope: ThemeScope
   setScope: (scope: ThemeScope) => void
   /** The active workspace's override document, if it has one. */
@@ -109,10 +104,6 @@ function mergeDeep<T>(base: T, patch: DeepPartial<T>): T {
   return mergeThemeDocuments(base, patch) as T
 }
 
-function namesToken(override: ThemeOverride | null, path: string): boolean {
-  return flattenThemeOverride(override).some((leaf) => leaf.path === path)
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }): JSX.Element {
   const [theme, setTheme] = useState<Theme>(defaultTheme)
   const [presets, setPresets] = useState<Theme[]>([])
@@ -141,7 +132,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
 
   const workspaceOverride = (workspace?.themeOverride ?? null) as ThemeOverride | null
   const workspaceThemeId = workspace?.themeId ?? null
-  const workspaceAccent = workspace?.accent ?? ''
 
   /**
    * The document an edit in global scope lands in.
@@ -159,15 +149,18 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
    * Composition order, most specific last:
    *   global theme (or the workspace's pinned preset)
    *     → the workspace's partial override document
-   *       → the workspace accent, unless the override already named one
+   *
+   * `workspace.accent` is deliberately *not* in that chain. It is the
+   * workspace's identity colour in the rail, and it is assigned at creation
+   * from a rotating palette -- nobody chose it. Letting it mask the theme's
+   * accent meant applying a theme never changed the accent, which made the
+   * gallery lie about what a preset looks like. A workspace that wants a
+   * different accent overrides `colors.accent` like any other token, and the
+   * studio keeps the chip in step when it does.
    */
   const compose = useCallback(
-    (source: Theme): Theme => {
-      const merged = applyThemeOverride(source, workspaceOverride)
-      if (!workspaceAccent || namesToken(workspaceOverride, 'colors.accent')) return merged
-      return { ...merged, colors: { ...merged.colors, accent: workspaceAccent } }
-    },
-    [workspaceOverride, workspaceAccent]
+    (source: Theme): Theme => applyThemeOverride(source, workspaceOverride),
+    [workspaceOverride]
   )
 
   const overrideIssues = useMemo(
@@ -281,7 +274,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       applyPreset,
       previewTheme: setPreview,
       previewing: preview !== null,
-      compose,
       scope,
       setScope,
       workspaceOverride,
@@ -301,7 +293,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       applyTheme,
       applyPreset,
       preview,
-      compose,
       scope,
       workspaceOverride,
       setWorkspaceOverride,
