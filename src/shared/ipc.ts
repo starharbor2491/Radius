@@ -82,6 +82,16 @@ export const ipcContract = {
     response: Ok
   },
   'tabs:reopenClosed': { request: Empty, response: TabSchema.nullable() },
+  /**
+   * The last picture taken of a tab, as a data URL, or null if there is none.
+   *
+   * Null is an ordinary answer, not an error: a tab that has never been left
+   * has never been photographed, and the preview falls back to its title.
+   */
+  'tabs:thumbnail': {
+    request: z.object({ tabId: IdSchema }),
+    response: z.object({ dataUrl: z.string().nullable() })
+  },
 
   /* ------------------------------------------------------------- groups */
   'groups:create': {

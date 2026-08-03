@@ -538,3 +538,48 @@ textarea.rx-css-editor {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* ------------------------------------------------------------------ *
+ * Motion studio
+ * ------------------------------------------------------------------ */
+
+.rx-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rx-space-2);
+}
+
+.rx-spring {
+  display: flex;
+  flex-direction: column;
+}
+
+.rx-spring-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  padding: var(--rx-space-2) 0 var(--rx-space-3) var(--rx-space-3);
+}
+
+/*
+ * The track a preview dot travels. Sized so an under-damped spring has room to
+ * overshoot visibly -- clipping the overshoot would hide the one thing damping
+ * is for.
+ */
+.rx-spring-preview {
+  display: block;
+  flex: none;
+  width: 56px;
+  height: 10px;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-surface-3);
+  overflow: hidden;
+}
+
+.rx-spring-dot {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--rx-radius-pill);
+  background: var(--rx-color-accent);
+}

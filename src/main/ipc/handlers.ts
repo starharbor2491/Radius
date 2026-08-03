@@ -119,6 +119,7 @@ export function registerIpcHandlers(services: AppServices): void {
       return OK
     },
     'tabs:reopenClosed': () => tabs.reopenClosed(),
+    'tabs:thumbnail': ({ tabId }) => ({ dataUrl: tabs.thumbnails.get(tabId) }),
 
     /* ----------------------------------------------------------- groups */
     'groups:create': (payload) => tabs.createGroup(payload),

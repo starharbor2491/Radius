@@ -361,6 +361,49 @@ and the rule it missed. Nothing is silently nudged into range: a user who wants
 a low-contrast theme gets one and is told what it costs. Gallery cards carry the
 same badge, and no shipped preset fails its own check — a test asserts that.
 
+## Motion
+
+Every animation pulls its physics from `useMotionTokens()`. No component writes
+a duration, a spring or a distance — those are tokens, which is what makes "tune
+the tab-drag spring" a slider rather than a code change.
+
+Three rules the pass established, each of which came from something that went
+wrong:
+
+**Turning motion off has to mean nothing moves.** Not "moves instantly". A tween
+collapsing to `{ duration: 0 }` is correct for a one-shot, and a *busy loop* for
+a repeating one — a zero-length animation repeating forever pins a core. `loop()`
+returns null instead and the caller renders the resting state. The same applies
+to distances: `hoverLift`, `pressScale`, `ripple`, `rubberBand` and `stagger` all
+resolve to zero, so nothing is displaced instantly either. `--rx-stagger` used to
+keep its full value with motion disabled, which meant a twelve-row list still
+took a third of a second to finish appearing with no animation on any row.
+
+**Do not animate children inside an animating container.** The workspace switch
+slides the whole strip; animating its twelve rows *as well* cost 183ms worst
+frame to show something invisible underneath a moving parent. Same for the
+command palette, which listed forty commands each with an entrance while the
+palette itself was scaling. Both now stand their children down.
+
+**Measure, do not assert.** `npm run audit:motion` boots the real app, loads it
+with tabs and groups, drives each animation and samples `requestAnimationFrame`
+deltas. It reports the worst frame and the share over budget, because a mean of
+60fps with one 200ms stall is a janky UI that averages fine.
+
+Two things that audit taught us are worth keeping in mind when reading its
+output:
+
+- **Absolute frame times are meaningless without a GPU.** In a headless session
+  everything composites in software, and every number lands on an exact multiple
+  of the vsync interval. The audit measures the machine's own idle floor first
+  and judges against that.
+- **The glass is the expensive thing, not the motion.** Flattening
+  `backdrop-filter` to zero drops the worst frame more than disabling every
+  animation does. That is why the `carbon` and `terminal` presets exist and why
+  `solid` is a first-class glass mode rather than a degraded one — on a machine
+  without GPU compositing it is the difference between a smooth chrome and a
+  slow one.
+
 ## The layout system
 
 The chrome is not a fixed frame. `src/shared/layout.ts` holds a zod-validated

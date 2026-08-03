@@ -11,10 +11,30 @@ export interface MotionHelpers {
   spring: (name: SpringName) => Transition
   /** A tween transition from the named duration token. */
   tween: (name: DurationName, easing?: keyof MotionTokens['easings']) => Transition
+  /**
+   * A transition that repeats forever -- a spinner, a thinking pulse, a
+   * shimmer.
+   *
+   * These need their own helper because the obvious construction is a trap: a
+   * `tween` collapses to `{ duration: 0 }` when motion is off, and a zero-length
+   * animation repeating infinitely is a busy loop that pins a core rather than
+   * the stillness the user asked for. `loop` returns null instead, and the
+   * caller renders the resting state.
+   */
+  loop: (name: DurationName) => Transition | null
   /** Stagger delay for the nth child of a list. */
   stagger: (index: number) => number
   /** Collapses a value to its resting state when motion is off. */
   when: <T>(animated: T, still: T) => T
+  /** Raw motion amounts, for components that need the number rather than a transition. */
+  amounts: {
+    /** Hover lift distance in px; 0 when motion is off. */
+    lift: number
+    /** Pressed scale factor; 1 when motion is off. */
+    press: number
+    /** Rubber-band amplitude, 0..1; 0 when motion is off. */
+    rubberBand: number
+  }
 }
 
 /**
@@ -50,9 +70,24 @@ export function useMotionTokens(): MotionHelpers {
       }
     },
 
+    loop: (name) => {
+      if (!enabled) return null
+      return {
+        duration: (motion.durations[name] * motion.scale) / 1000,
+        repeat: Number.POSITIVE_INFINITY,
+        ease: 'linear'
+      }
+    },
+
     stagger: (index) => (enabled ? index * motion.stagger * motion.scale : 0),
 
-    when: (animated, still) => (enabled ? animated : still)
+    when: (animated, still) => (enabled ? animated : still),
+
+    amounts: {
+      lift: enabled ? motion.hoverLift : 0,
+      press: enabled ? motion.pressScale : 1,
+      rubberBand: enabled ? motion.rubberBand : 0
+    }
   }
 }
 

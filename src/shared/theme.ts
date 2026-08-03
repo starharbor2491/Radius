@@ -246,7 +246,16 @@ export const MotionTokensSchema = z
         instant: z.number().default(80),
         fast: z.number().default(140),
         normal: z.number().default(220),
-        slow: z.number().default(380)
+        slow: z.number().default(380),
+        /**
+         * One cycle of a repeating animation -- the spinner's rotation, the
+         * assistant's thinking pulse, the shimmer travelling over a streaming
+         * reply. Separate from the one-shot durations because a loop that is
+         * "fast" is a strobe: these are deliberately an order slower.
+         */
+        pulse: z.number().default(1600),
+        spin: z.number().default(700),
+        shimmer: z.number().default(1200)
       })
       .prefault({}),
     easings: z
@@ -259,7 +268,16 @@ export const MotionTokensSchema = z
     /** Delay between children in a staggered list, in seconds. */
     stagger: z.number().min(0).max(0.5).default(0.026),
     /** Amplitude of the rubber-band overscroll effect, 0 disables it. */
-    rubberBand: z.number().min(0).max(1).default(0.35)
+    rubberBand: z.number().min(0).max(1).default(0.35),
+    /**
+     * How far a control lifts on hover, in pixels. One number rather than one
+     * per component, so "everything lifts a bit less" is a single edit.
+     */
+    hoverLift: z.number().min(0).max(8).default(1),
+    /** How far a pressed control sinks. Expressed as a scale factor. */
+    pressScale: z.number().min(0.8).max(1).default(0.97),
+    /** Opacity of the press ripple at its start. 0 disables the ripple. */
+    ripple: z.number().min(0).max(1).default(0.22)
   })
   .prefault({})
 export type MotionTokens = z.infer<typeof MotionTokensSchema>
@@ -812,8 +830,23 @@ export function resolveThemeVars(theme: Theme): Record<string, string> {
   const motionScale = motion.enabled ? motion.scale : 0
   vars['--rx-motion-enabled'] = motion.enabled ? '1' : '0'
   vars['--rx-motion-scale'] = String(motionScale)
-  vars['--rx-stagger'] = `${motion.stagger * (motionScale || 1)}s`
+  /*
+   * Zero when motion is off, not the unscaled value.
+   *
+   * The `|| 1` that used to be here kept the full stagger alive with animation
+   * disabled, so a twelve-row list still took a third of a second to finish
+   * appearing -- rows arriving one after another with no animation on any of
+   * them, which is the worst of both. `useMotionTokens().stagger()` already
+   * returned 0 in that case, so the CSS variable disagreed with the JS helper.
+   */
+  vars['--rx-stagger'] = `${motion.enabled ? motion.stagger * motion.scale : 0}s`
   vars['--rx-rubber-band'] = String(motion.enabled ? motion.rubberBand : 0)
+  // Every "how far does it move" amount collapses to nothing when motion is
+  // off. Turning motion off has to mean the UI stops moving, not that it moves
+  // the same distance instantly.
+  vars['--rx-hover-lift'] = `${motion.enabled ? motion.hoverLift : 0}px`
+  vars['--rx-press-scale'] = String(motion.enabled ? motion.pressScale : 1)
+  vars['--rx-ripple'] = String(motion.enabled ? motion.ripple : 0)
   for (const [name, duration] of Object.entries(motion.durations)) {
     vars[`--rx-duration-${name}`] = `${Math.round(duration * motionScale)}ms`
   }

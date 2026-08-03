@@ -419,3 +419,54 @@ describe('auditThemeContrast', () => {
     }
   })
 })
+
+describe('motion tokens', () => {
+  it('emits a separate, much slower duration for looping animations', () => {
+    const vars = resolveThemeVars(parseTheme({}))
+    // A loop that runs at the one-shot "fast" duration is a strobe, not a hint.
+    expect(Number.parseInt(vars['--rx-duration-pulse']!, 10)).toBeGreaterThan(
+      Number.parseInt(vars['--rx-duration-normal']!, 10) * 4
+    )
+    expect(vars['--rx-duration-spin']).toBeTruthy()
+    expect(vars['--rx-duration-shimmer']).toBeTruthy()
+  })
+
+  it('collapses every duration and every distance when motion is off', () => {
+    const vars = resolveThemeVars(parseTheme({ motion: { enabled: false } }))
+
+    // Durations: an animation that still has a duration has not been disabled.
+    for (const [name, value] of Object.entries(vars)) {
+      if (name.startsWith('--rx-duration-')) expect(value, name).toBe('0ms')
+    }
+
+    // Amounts: turning motion off has to mean nothing moves, not that it moves
+    // the same distance instantly.
+    expect(vars['--rx-hover-lift']).toBe('0px')
+    expect(vars['--rx-press-scale']).toBe('1')
+    expect(vars['--rx-ripple']).toBe('0')
+    expect(vars['--rx-rubber-band']).toBe('0')
+    expect(vars['--rx-stagger']).toBe('0s')
+  })
+
+  it('keeps the amounts when motion is on', () => {
+    const vars = resolveThemeVars(
+      parseTheme({ motion: { enabled: true, hoverLift: 3, pressScale: 0.9, ripple: 0.4 } })
+    )
+    expect(vars['--rx-hover-lift']).toBe('3px')
+    expect(vars['--rx-press-scale']).toBe('0.9')
+    expect(vars['--rx-ripple']).toBe('0.4')
+  })
+
+  it('scales loop durations with the speed multiplier like everything else', () => {
+    const slow = resolveThemeVars(parseTheme({ motion: { scale: 2 } }))
+    const base = resolveThemeVars(parseTheme({ motion: { scale: 1 } }))
+    expect(Number.parseInt(slow['--rx-duration-pulse']!, 10)).toBe(
+      Number.parseInt(base['--rx-duration-pulse']!, 10) * 2
+    )
+  })
+
+  it('rejects a hover lift big enough to make the chrome jump', () => {
+    // The schema bounds this: a 40px lift on a 28px control is not a hover.
+    expect(() => parseTheme({ motion: { hoverLift: 40 } })).toThrow()
+  })
+})

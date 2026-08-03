@@ -5,6 +5,12 @@ import { useMotionTokens } from '../lib/motion'
 import type { Command } from '../lib/commands'
 
 /**
+ * How many rows fit in the palette before it scrolls. Rows past this are
+ * mounted without an entrance, because nobody is looking at them yet.
+ */
+const VISIBLE_ROWS = 10
+
+/**
  * Fallback grouping, by the first segment of a command id.
  *
  * `Command.group` is the real source; this only catches commands registered
@@ -170,9 +176,23 @@ export function CommandPalette({ commands }: { commands: Command[] }): JSX.Eleme
                       className="rx-suggestion"
                       data-index={index}
                       data-selected={index === selected ? 'true' : 'false'}
-                      initial={{ opacity: 0, y: 4 }}
+                      /*
+                       * Only the rows you can actually see animate in.
+                       *
+                       * The palette lists every command -- forty-odd of them --
+                       * and giving each an entrance meant forty animations
+                       * starting inside a container that is itself scaling.
+                       * Measured at 183ms worst frame; the rows past the fold
+                       * are not visible while they play, so they cost frames to
+                       * show nobody anything.
+                       */
+                      initial={index < VISIBLE_ROWS ? { opacity: 0, y: 4 } : false}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ ...tween('fast'), delay: stagger(Math.min(index, 8)) }}
+                      transition={
+                        index < VISIBLE_ROWS
+                          ? { ...tween('fast'), delay: stagger(index) }
+                          : { duration: 0 }
+                      }
                       onMouseEnter={() => setSelected(index)}
                       onMouseDown={(event) => {
                         event.preventDefault()

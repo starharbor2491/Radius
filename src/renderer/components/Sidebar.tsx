@@ -1,7 +1,7 @@
-import { forwardRef, useCallback, useRef, useState, type JSX } from 'react'
+import { forwardRef, useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useActiveWorkspace, useAppStore } from '../store/useAppStore'
-import { useUiStore } from '../store/useUiStore'
+import { SIDEBAR_MAX, SIDEBAR_MIN, useUiStore } from '../store/useUiStore'
 import { send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
 import { Icon } from '../ui/Icon'
@@ -30,9 +30,38 @@ export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwa
     (store) => store.state.tabs.filter((tab) => tab.workspaceId === store.state.activeWorkspaceId).length
   )
   const { sidebarOpen, sidebarWidth, setSidebarWidth, bookmarksOpen, toggleBookmarks } = useUiStore()
-  const { spring } = useMotionTokens()
+  const { spring, when, amounts } = useMotionTokens()
+  const { rubberBand } = amounts
+
+  /*
+   * Which way the workspaces moved, so the transition travels in the direction
+   * the rail implies rather than always the same way. Ordering comes from the
+   * rail itself, so clicking the workspace above always slides down and the one
+   * below always slides up.
+   */
+  const workspaceIds = useAppStore((store) => store.state.workspaces.map((entry) => entry.id).join())
+  const previousIndex = useRef(0)
+  const index = workspaceIds.split(',').indexOf(workspace?.id ?? '')
+  const direction = index === -1 || index === previousIndex.current ? 1 : index > previousIndex.current ? 1 : -1
+  useEffect(() => {
+    if (index !== -1) previousIndex.current = index
+  }, [index])
+
+  /*
+   * True while a workspace switch is in flight. The strip animates as one
+   * block during that window, so its rows stand down -- see the note on
+   * `TabStrip`'s `settling` prop for the measurement that motivated it.
+   */
+  const [settling, setSettling] = useState(false)
+  useEffect(() => {
+    setSettling(true)
+    const timer = window.setTimeout(() => setSettling(false), 520)
+    return () => window.clearTimeout(timer)
+  }, [workspace?.id])
 
   const [dragging, setDragging] = useState(false)
+  /** How far past a bound the handle is being pulled, in px. */
+  const [overshoot, setOvershoot] = useState(0)
 
   const startResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -41,18 +70,43 @@ export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwa
       const startX = event.clientX
       const startWidth = sidebarWidth
 
+      /*
+       * Rubber band past the limits.
+       *
+       * Dragging beyond a bound used to feel like the pointer had come unstuck
+       * from the handle: it kept moving and nothing did. The band goes on the
+       * *handle*, not the width -- the sidebar genuinely cannot get wider, so
+       * stretching it and snapping back would be a lie. Instead the handle
+       * follows your hand with growing resistance and springs home on release,
+       * which says "this is the edge" without pretending otherwise.
+       *
+       * At amplitude 0 it stops dead at the bound, which is what someone who
+       * turned motion off is asking for.
+       */
       const onMove = (moveEvent: PointerEvent): void => {
-        setSidebarWidth(startWidth + (moveEvent.clientX - startX))
+        const desired = startWidth + (moveEvent.clientX - startX)
+        setSidebarWidth(desired)
+
+        const over =
+          desired < SIDEBAR_MIN
+            ? desired - SIDEBAR_MIN
+            : desired > SIDEBAR_MAX
+              ? desired - SIDEBAR_MAX
+              : 0
+        // Square-root resistance: responsive at first, stiffer the further you
+        // pull, and bounded rather than running away with the pointer.
+        setOvershoot(Math.sign(over) * Math.sqrt(Math.abs(over)) * 6 * rubberBand)
       }
       const onUp = (): void => {
         setDragging(false)
+        setOvershoot(0)
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
       }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
     },
-    [sidebarWidth, setSidebarWidth]
+    [sidebarWidth, setSidebarWidth, rubberBand]
   )
 
   return (
@@ -101,7 +155,29 @@ export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwa
               </IconButton>
             </div>
 
-            <TabStrip />
+            {/*
+              Switching workspace should read as changing *place*, not as a list
+              refreshing. The outgoing set leaves against the direction of
+              travel and the incoming set arrives with it, at a slower, heavier
+              spring than anything else in the chrome -- the `workspaceSwitch`
+              token exists for exactly this and had never been used.
+
+              `mode="popLayout"` so the two sets cross rather than the incoming
+              one waiting for the outgoing one to finish.
+            */}
+            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+              <motion.div
+                key={workspace?.id ?? 'none'}
+                className="rx-workspace-slide"
+                custom={direction}
+                initial={when<Record<string, number> | false>({ opacity: 0, x: direction * 26 }, false)}
+                animate={{ opacity: 1, x: 0 }}
+                exit={when<Record<string, number>>({ opacity: 0, x: direction * -18 }, { opacity: 0 })}
+                transition={spring('workspaceSwitch')}
+              >
+                <TabStrip settling={settling} />
+              </motion.div>
+            </AnimatePresence>
 
             {/*
               Bookmarks and workspace deletion both belong to the frame rather
@@ -138,12 +214,14 @@ export const Sidebar = forwardRef<HTMLDivElement>(function Sidebar(_props, forwa
       </AnimatePresence>
 
       {sidebarOpen ? (
-        <div
+        <motion.div
           className="rx-sidebar-resize"
           data-dragging={dragging ? 'true' : 'false'}
           onPointerDown={startResize}
           role="separator"
           aria-orientation="vertical"
+          animate={{ x: overshoot }}
+          transition={dragging ? { duration: 0 } : spring('press')}
         />
       ) : null}
     </div>

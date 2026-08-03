@@ -23,7 +23,8 @@
     "package": "npm run build && electron-builder",
     "smoke:app": "electron-vite build && electron --no-sandbox scripts/smoke-app.cjs",
     "package:mac": "electron-vite build && electron-builder --mac --publish never",
-    "test:install": "bash scripts/test-install.sh"
+    "test:install": "bash scripts/test-install.sh",
+    "audit:motion": "electron-vite build && electron --no-sandbox scripts/audit-motion.cjs"
   },
   "dependencies": {
     "motion": "^12.42.2",

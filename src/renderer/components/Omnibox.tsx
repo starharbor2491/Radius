@@ -32,7 +32,7 @@ export function Omnibox(): JSX.Element {
   const bookmarks = useAppStore((store) => store.state.bookmarks)
   const engineId = useAppStore((store) => store.state.settings.searchEngineId)
   const { omniboxFocused, setOmniboxFocused } = useUiStore()
-  const { spring, tween, stagger } = useMotionTokens()
+  const { spring, tween, stagger, when } = useMotionTokens()
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState('')
@@ -196,10 +196,26 @@ export function Omnibox(): JSX.Element {
           <motion.div
             className="rx-glass rx-suggestions"
             data-surface="popover"
-            initial={{ opacity: 0, y: -6, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.99 }}
-            transition={tween('fast')}
+            /*
+             * Morph, not drop.
+             *
+             * The panel grows out of the pill: it starts the pill's own width
+             * and radius and expands to its full size, so the two read as one
+             * object changing shape rather than a menu appearing beneath an
+             * unrelated field. `scaleY` from the top edge is what sells it --
+             * the panel unrolls downward from where the field already is.
+             */
+            style={{ originY: 0, originX: 0.5 }}
+            initial={when(
+              { opacity: 0, scaleY: 0.6, y: -10, borderRadius: 'var(--rx-radius-pill)' },
+              { opacity: 0 }
+            )}
+            animate={{ opacity: 1, scaleY: 1, y: 0, borderRadius: 'var(--rx-radius-lg)' }}
+            exit={when(
+              { opacity: 0, scaleY: 0.7, y: -8, borderRadius: 'var(--rx-radius-pill)' },
+              { opacity: 0 }
+            )}
+            transition={spring('popover')}
           >
             {suggestions.map((suggestion, index) => (
               <motion.div

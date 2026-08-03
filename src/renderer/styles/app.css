@@ -361,6 +361,8 @@ textarea {
  * ------------------------------------------------------------------ */
 
 .rx-button {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -469,6 +471,7 @@ textarea {
 
 .rx-icon-button {
   position: relative;
+  overflow: hidden;
   display: inline-grid;
   place-items: center;
   width: calc(28px * var(--rx-density));
@@ -901,6 +904,16 @@ input[type='checkbox']:focus-visible {
   border-left: 2px solid var(--rx-group-color);
   padding-left: var(--rx-space-2);
   margin: var(--rx-space-1) 0;
+  border-radius: var(--rx-radius-sm);
+  transition:
+    background var(--rx-duration-fast) var(--rx-ease-standard),
+    box-shadow var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+/* The group a released tab would land in. */
+.rx-group[data-magnet='true'] {
+  background: color-mix(in oklch, var(--rx-group-color) 12%, transparent);
+  box-shadow: 0 0 0 1px var(--rx-group-color);
 }
 
 .rx-group-header {
@@ -1367,6 +1380,109 @@ input[type='checkbox']:focus-visible {
 }
 
 /* ------------------------------------------------------------------ *
+ * Motion primitives
+ *
+ * The catalogue in ROADMAP.md, in CSS where CSS is the right tool. Every
+ * duration, distance and amplitude below is a token, so "make it calmer" is a
+ * slider and "motion off" is genuinely off -- when motion is disabled the
+ * engine emits 0ms durations and zero amplitudes, which stops these rather
+ * than running them instantly on a loop.
+ * ------------------------------------------------------------------ */
+
+.rx-spinner {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--rx-radius-pill);
+  border: 1.5px solid var(--rx-color-border-strong);
+  border-top-color: var(--rx-color-accent);
+}
+
+/*
+ * A shimmer travelling over text as it streams in. Applied to the last run of
+ * tokens only, so the whole reply is not permanently in motion while you read
+ * the part that has already arrived.
+ */
+.rx-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--rx-color-text-muted) 0%,
+    var(--rx-color-text) 45%,
+    var(--rx-color-text) 55%,
+    var(--rx-color-text-muted) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rx-shimmer var(--rx-duration-shimmer) linear infinite;
+}
+
+@keyframes rx-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/*
+ * Press ripple. One element, keyed on each press so it restarts, positioned
+ * from the pointer by the component. `--rx-ripple` is the starting opacity and
+ * zero disables it outright.
+ */
+.rx-ripple {
+  position: absolute;
+  border-radius: var(--rx-radius-pill);
+  background: currentColor;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: rx-ripple var(--rx-duration-normal) var(--rx-ease-exit) forwards;
+}
+
+@keyframes rx-ripple {
+  from {
+    width: 0;
+    height: 0;
+    opacity: var(--rx-ripple);
+  }
+  to {
+    width: var(--rx-ripple-size, 64px);
+    height: var(--rx-ripple-size, 64px);
+    opacity: 0;
+  }
+}
+
+/*
+ * The travelling focus ring.
+ *
+ * A single element that moves to whatever has keyboard focus, so tabbing reads
+ * as one ring crossing the UI rather than a ring blinking out here and in
+ * there. It is decoration on top of the real `:focus-visible` outline, never a
+ * replacement -- if this fails to position, focus is still visible.
+ */
+.rx-focus-ring {
+  position: fixed;
+  z-index: 70;
+  border: 2px solid var(--rx-color-accent);
+  border-radius: var(--rx-radius-md);
+  pointer-events: none;
+}
+
+/*
+ * Scroll-boundary bounce. `overscroll-behavior: contain` stops a panel's
+ * scroll chaining to the window, and the elastic effect comes from the same
+ * rubber-band amplitude the sidebar resize uses.
+ */
+.rx-panel-scroll,
+.rx-chat-log,
+.rx-tabs,
+.rx-palette-list {
+  overscroll-behavior: contain;
+}
+
+/* ------------------------------------------------------------------ *
  * Chat
  * ------------------------------------------------------------------ */
 
@@ -1732,7 +1848,7 @@ input[type='checkbox']:focus-visible {
 /* Pulses only while the agent is actually doing something. */
 .rx-agent-dot[data-busy='true'] {
   background: var(--rx-color-accent);
-  animation: rx-agent-pulse 1.4s ease-in-out infinite;
+  animation: rx-agent-pulse var(--rx-duration-pulse) ease-in-out infinite;
 }
 
 @keyframes rx-agent-pulse {
@@ -1764,4 +1880,121 @@ input[type='checkbox']:focus-visible {
 
 .rx-agent-step[data-ok='false'] .rx-agent-step-kind {
   color: var(--rx-color-danger);
+}
+
+/* ------------------------------------------------------------------ *
+ * Tab peek
+ * ------------------------------------------------------------------ */
+
+/*
+ * Anchored below its row, inside the sidebar.
+ *
+ * The obvious placement -- hanging off the right edge of the row, over the page
+ * -- cannot work here. The chrome is a view *underneath* the page view, so
+ * anything painted outside the sidebar's own column is simply behind the web
+ * page and invisible. Raising the chrome (`chrome:setOverlay`) would fix that
+ * but is modal by construction, and taking clicks away from the page every time
+ * the pointer crosses a tab is a bad trade for a preview. So it overlays the
+ * rows beneath it instead, which costs nothing and is always visible.
+ */
+.rx-peek {
+  position: absolute;
+  left: var(--rx-space-1);
+  right: var(--rx-space-1);
+  top: calc(100% + var(--rx-space-1));
+  z-index: 30;
+  padding: var(--rx-space-2);
+  border-radius: var(--rx-radius-lg);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-2);
+}
+
+.rx-peek-shot {
+  display: block;
+  width: 100%;
+  border-radius: var(--rx-radius-md);
+  border: var(--rx-border-width) solid var(--rx-color-border);
+}
+
+/* Said plainly rather than drawn as a grey rectangle pretending to be a page. */
+.rx-peek-blank {
+  display: grid;
+  place-items: center;
+  height: 96px;
+  border-radius: var(--rx-radius-md);
+  border: var(--rx-border-width) dashed var(--rx-color-border);
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+  text-align: center;
+}
+
+.rx-peek-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rx-peek-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--rx-weight-medium);
+}
+
+/* A message's header row: who said it, and a way to take it with you. */
+.rx-message-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rx-space-2);
+}
+
+.rx-copy {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: none;
+  border-radius: var(--rx-radius-sm);
+  background: transparent;
+  color: var(--rx-color-text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+/* Revealed on hover or focus, so a column of messages is not a column of icons. */
+.rx-message:hover .rx-copy,
+.rx-copy:focus-visible {
+  opacity: 1;
+}
+
+.rx-copy:hover {
+  background: var(--rx-color-surface-3);
+  color: var(--rx-color-text);
+}
+
+.rx-copy[data-state='copied'] {
+  opacity: 1;
+  color: var(--rx-color-success);
+}
+
+.rx-copy[data-state='failed'] {
+  opacity: 1;
+  color: var(--rx-color-danger);
+}
+
+/*
+ * The moving half of a workspace switch. It has to be a flex column that can
+ * shrink, or the outgoing and incoming strips fight over the sidebar's height
+ * while both are mounted.
+ */
+.rx-workspace-slide {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }

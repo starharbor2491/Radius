@@ -6,9 +6,17 @@ import { QUICK_ACTIONS, type QuickAction } from '@shared/quick-actions'
 import { useActiveTab, useWorkspaceTabs } from '../store/useAppStore'
 import { bridge, send } from '../lib/bridge'
 import { useMotionTokens } from '../lib/motion'
+import { CopyButton } from '../ui/CopyButton'
 import { Icon, type IconName } from '../ui/Icon'
 import { ModelPicker, useSelectableProviders, type ModelSelection } from '../ui/ModelPicker'
 import { Button } from '../ui/primitives'
+
+/**
+ * How many trailing characters the shimmer covers. Roughly a phrase: enough
+ * to read as "this bit is arriving", short enough that it does not sweep back
+ * over text you already finished.
+ */
+const SHIMMER_TAIL = 90
 
 interface Draft {
   runId: string
@@ -26,7 +34,7 @@ interface Draft {
 export function ChatPanel(): JSX.Element {
   const tabs = useWorkspaceTabs()
   const activeTab = useActiveTab()
-  const { spring, tween } = useMotionTokens()
+  const { spring, tween, enabled } = useMotionTokens()
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -261,7 +269,10 @@ export function ChatPanel(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             transition={spring('panel')}
           >
-            <span className="rx-message-role">{message.role}</span>
+            <div className="rx-message-head">
+              <span className="rx-message-role">{message.role}</span>
+              <CopyButton text={message.content} />
+            </div>
             <div className="rx-message-body">{message.content}</div>
           </motion.div>
         ))}
@@ -284,8 +295,17 @@ export function ChatPanel(): JSX.Element {
                 <div className="rx-message-body">{draft.reasoning}</div>
               </details>
             ) : null}
+            {/*
+              The shimmer runs over the tail of the reply only. Applying it to
+              the whole message would keep the part you are already reading in
+              permanent motion, which is the opposite of what "this is still
+              arriving" should communicate.
+            */}
             <div className="rx-message-body">
-              {draft.text}
+              {draft.text.slice(0, Math.max(0, draft.text.length - SHIMMER_TAIL))}
+              <span className={enabled ? 'rx-shimmer' : undefined}>
+                {draft.text.slice(Math.max(0, draft.text.length - SHIMMER_TAIL))}
+              </span>
               <span className="rx-caret" />
             </div>
           </motion.div>

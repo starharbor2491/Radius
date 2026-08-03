@@ -29,6 +29,7 @@ import { send } from './lib/bridge'
 import { Sidebar } from './components/Sidebar'
 import { Toolbar } from './components/Toolbar'
 import { CommandPalette } from './components/CommandPalette'
+import { FocusRing } from './ui/FocusRing'
 import { FindBar } from './components/FindBar'
 import { ChatPanel } from './panels/ChatPanel'
 import { AgentPanel } from './panels/AgentPanel'
@@ -153,6 +154,7 @@ export function App(): JSX.Element {
       <DropZones layout={layout} />
       <CommandPalette commands={commands} />
       <Toast message={toast} />
+      <FocusRing />
       <ChordIndicator />
     </div>
   )

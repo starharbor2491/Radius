@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, JSX, ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMotionTokens } from '../lib/motion'
+import { useRipple } from './useRipple'
 
 export type GlassSurface = 'chrome' | 'panel' | 'popover' | 'overlay'
 
@@ -31,9 +32,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'ghost' | 'primary' | 'outline' | 'danger'
 }
 
-/** Press feedback comes from the `press` spring token, so it is user-tunable. */
+/**
+ * Press feedback comes from the `press` spring and the `pressScale` amount, so
+ * both the physics and the depth are user-tunable, and a ripple starts from
+ * wherever the press actually landed.
+ */
 export function Button({ variant = 'ghost', className, ...rest }: ButtonProps): JSX.Element {
-  const { spring, when } = useMotionTokens()
+  const { spring, when, amounts } = useMotionTokens()
+  const { onPointerDown, ripples } = useRipple()
   return (
     <motion.button
       {...(rest as object)}
@@ -41,9 +47,16 @@ export function Button({ variant = 'ghost', className, ...rest }: ButtonProps): 
       data-variant={variant}
       data-radius-part="button"
       className={['rx-button', className].filter(Boolean).join(' ')}
-      whileTap={when({ scale: 0.96 }, {})}
+      whileTap={when({ scale: amounts.press }, {})}
       transition={spring('press')}
-    />
+      onPointerDown={(event) => {
+        onPointerDown(event)
+        rest.onPointerDown?.(event)
+      }}
+    >
+      {rest.children}
+      {ripples}
+    </motion.button>
   )
 }
 
@@ -52,7 +65,8 @@ export function IconButton({
   className,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }): JSX.Element {
-  const { spring, when } = useMotionTokens()
+  const { spring, when, amounts } = useMotionTokens()
+  const { onPointerDown, ripples } = useRipple()
   return (
     <motion.button
       {...(rest as object)}
@@ -60,10 +74,17 @@ export function IconButton({
       data-active={active ? 'true' : 'false'}
       data-radius-part="icon-button"
       className={['rx-icon-button', className].filter(Boolean).join(' ')}
-      whileHover={when({ scale: 1.08 }, {})}
-      whileTap={when({ scale: 0.92 }, {})}
+      whileHover={when({ scale: 1.08, y: -amounts.lift }, {})}
+      whileTap={when({ scale: amounts.press, y: 0 }, {})}
       transition={spring('press')}
-    />
+      onPointerDown={(event) => {
+        onPointerDown(event)
+        rest.onPointerDown?.(event)
+      }}
+    >
+      {rest.children}
+      {ripples}
+    </motion.button>
   )
 }
 
@@ -158,20 +179,22 @@ export function Toast({ message }: { message: string | null }): JSX.Element {
   )
 }
 
-/** Load indicator that morphs into the favicon once the page settles. */
+/**
+ * Load indicator that morphs into the favicon once the page settles.
+ *
+ * With motion off it stops rotating and becomes a static ring rather than
+ * spinning instantly forever -- a zero-duration animation repeating infinitely
+ * is a busy loop, not stillness.
+ */
 export function Spinner(): JSX.Element {
+  const { loop } = useMotionTokens()
+  const spin = loop('spin')
+
   return (
     <motion.span
-      style={{
-        width: 11,
-        height: 11,
-        borderRadius: '50%',
-        border: '1.5px solid var(--rx-color-border-strong)',
-        borderTopColor: 'var(--rx-color-accent)',
-        display: 'block'
-      }}
-      animate={{ rotate: 360 }}
-      transition={{ repeat: Number.POSITIVE_INFINITY, ease: 'linear', duration: 0.7 }}
+      className="rx-spinner"
+      animate={spin ? { rotate: 360 } : undefined}
+      transition={spin ?? undefined}
     />
   )
 }

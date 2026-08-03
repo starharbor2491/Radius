@@ -232,12 +232,37 @@ body .rx-main {
   inset-block-end: 0;
 }
 
+/*
+ * The zone under the pointer glows rather than merely changing colour. A drop
+ * target is a promise about where the thing will land, and a promise should be
+ * the loudest thing on screen while you are deciding whether to let go.
+ */
 .rx-drop-zone[data-active='true'] {
   border-style: solid;
   border-color: var(--rx-color-accent);
   background: var(--rx-color-surface-3);
   color: var(--rx-color-text);
-  box-shadow: var(--rx-elevation-3);
+  box-shadow:
+    var(--rx-elevation-3),
+    0 0 0 1px var(--rx-color-accent),
+    0 0 28px -6px var(--rx-color-accent);
+  animation: rx-drop-glow var(--rx-duration-pulse) ease-in-out infinite;
+}
+
+@keyframes rx-drop-glow {
+  0%,
+  100% {
+    box-shadow:
+      var(--rx-elevation-3),
+      0 0 0 1px var(--rx-color-accent),
+      0 0 20px -8px var(--rx-color-accent);
+  }
+  50% {
+    box-shadow:
+      var(--rx-elevation-3),
+      0 0 0 1px var(--rx-color-accent),
+      0 0 34px -4px var(--rx-color-accent);
+  }
 }
 
 .rx-drop-label {

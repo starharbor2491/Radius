@@ -93,16 +93,33 @@ Still open:
 
 ## M4 — Motion pass
 
-The full micro-interaction catalogue, each driven by motion tokens so it stays
-tunable and disableable:
+Done. The catalogue, each item driven by motion tokens so it stays tunable and
+disableable:
 
-tab hover lift and peek preview · magnetic snap into groups · group accordion ·
-omnibox morph-expand · palette stagger · streaming-token shimmer · AI thinking
-pulse · copy-to-checkmark morph · toast stack physics · rubber-band sidebar
-resize · workspace cross-fade and parallax · spinner→favicon morph · drop-zone
-glow · press ripple · travelling focus ring · scroll-boundary bounce
+tab hover lift · tab peek preview with real page thumbnails · magnetic snap into
+groups · group accordion · omnibox morph-expand from pill to panel · palette
+stagger · streaming-token shimmer · assistant thinking pulse · copy-to-checkmark
+morph · toast physics · rubber-band sidebar resize · workspace cross-fade with
+directional parallax · spinner→favicon morph · drop-zone glow · press ripple from
+the point pressed · travelling focus ring · scroll-boundary containment
 
-Plus a 60fps audit and a motion-token tuning UI.
+Plus:
+
+- **A motion studio**: presets (Reduced/Snappy/Balanced/Expressive), speed, the
+  hover/press/ripple/rubber-band amounts, stagger, and all six springs — each
+  with a preview that runs the actual transition on the actual physics, because
+  nobody can tell what damping 34 feels like by reading it
+- **`npm run audit:motion`**: boots the real app, drives every animation and
+  samples frame deltas, judged against the machine's own idle floor
+- Three new duration tokens for looping animations, kept an order of magnitude
+  slower than the one-shot durations — a loop that runs at "fast" is a strobe
+
+Still open:
+
+- Tab peek shows the last capture, so a tab you have never left has no preview.
+  Capturing on first paint would close that, at the cost of a readback per load.
+- The peek is anchored inside the sidebar rather than over the page: the chrome
+  sits *under* the page view, and raising it is modal. See `ARCHITECTURE.md`.
 
 ## M5 — Hardening and ship
 

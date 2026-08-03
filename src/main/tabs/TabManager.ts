@@ -1,4 +1,5 @@
 import type { StateStore } from '../state/StateStore'
+import { ThumbnailStore } from './ThumbnailStore'
 import type { RadiusWindow } from '../window/RadiusWindow'
 import type { Tab, TabGroupColor } from '@shared/types'
 import { parseOmniboxInput, resolveSearchEngine } from '@shared/url'
@@ -37,12 +38,16 @@ export const DEFAULT_SUSPENSION: SuspensionOptions = {
  */
 export class TabManager {
   private sweepTimer: NodeJS.Timeout | null = null
+  /** Page thumbnails for the tab strip's hover preview. */
+  readonly thumbnails: ThumbnailStore
 
   constructor(
     private readonly state: StateStore,
     private readonly window: RadiusWindow,
     private suspension: SuspensionOptions = DEFAULT_SUSPENSION
-  ) {}
+  ) {
+    this.thumbnails = new ThumbnailStore(window)
+  }
 
   /* --------------------------------------------------------- lifecycle */
 
@@ -119,6 +124,15 @@ export class TabManager {
     const tab = this.state.getTab(tabId)
     if (!tab) return
 
+    /*
+     * Photograph the tab we are leaving. This is the moment its picture stops
+     * changing, and the last one at which it is guaranteed to still have a
+     * view -- capture on hover instead and a suspended tab has nothing to
+     * capture from.
+     */
+    const leaving = this.window.getActiveTabId()
+    if (leaving && leaving !== tabId) void this.thumbnails.capture(leaving)
+
     this.wake(tab)
     this.window.setActiveTab(tabId)
     this.state.setActiveTabId(tab.workspaceId, tabId)
@@ -140,6 +154,7 @@ export class TabManager {
     const wasActive = this.state.getActiveTabId(tab.workspaceId) === tabId
 
     this.window.destroyView(tabId)
+    this.thumbnails.forget(tabId)
     this.state.closeTab(tabId)
 
     if (!wasActive) return
@@ -227,6 +242,9 @@ export class TabManager {
   suspend(tabId: string): void {
     if (this.window.getActiveTabId() === tabId) return
     if (!this.window.hasView(tabId)) return
+    // Last chance: once the view is destroyed there is nothing left to capture,
+    // and a sleeping tab is exactly the one whose preview is most useful.
+    void this.thumbnails.capture(tabId)
     this.window.destroyView(tabId)
     this.state.setRuntime(tabId, {
       suspended: true,
