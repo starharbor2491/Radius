@@ -30,7 +30,7 @@ import { useActiveWorkspace } from '../store/useAppStore'
 export type ThemeScope = 'global' | 'workspace'
 
 interface ThemeContextValue {
-  /** What is on screen: base theme, workspace override and preview composed. */
+  /** What is on screen: the base theme with any workspace override composed in. */
   theme: Theme
   /** The persisted global document, before any workspace override. */
   baseTheme: Theme
@@ -40,10 +40,6 @@ interface ThemeContextValue {
   /** Replaces the global document wholesale -- import, revert, preset apply. */
   applyTheme: (theme: Theme) => void
   applyPreset: (presetId: string) => void
-  /** Shows a theme without persisting it. `null` returns to what is in use. */
-  previewTheme: (theme: Theme | null) => void
-  /** True while a preview is on screen, so surfaces can say the view is not real. */
-  previewing: boolean
   scope: ThemeScope
   setScope: (scope: ThemeScope) => void
   /** The active workspace's override document, if it has one. */
@@ -108,7 +104,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   const [theme, setTheme] = useState<Theme>(defaultTheme)
   const [presets, setPresets] = useState<Theme[]>([])
   const [reducedMotion, setReducedMotion] = useState(false)
-  const [preview, setPreview] = useState<Theme | null>(null)
   const [scope, setScope] = useState<ThemeScope>('global')
   const workspace = useActiveWorkspace()
 
@@ -168,10 +163,7 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
     [baseTheme, workspaceOverride]
   )
 
-  const effectiveTheme = useMemo<Theme>(
-    () => compose(preview ?? baseTheme),
-    [compose, preview, baseTheme]
-  )
+  const effectiveTheme = useMemo<Theme>(() => compose(baseTheme), [compose, baseTheme])
 
   const userCssWarnings = useMemo(
     () => sanitizeUserCss(effectiveTheme.userCss).warnings,
@@ -200,7 +192,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
   }, [effectiveTheme.geometry.pageInset, effectiveTheme.geometry.pageRadius])
 
   const applyTheme = useCallback((next: Theme) => {
-    setPreview(null)
     setTheme(next)
     send('theme:set', { theme: next })
   }, [])
@@ -226,7 +217,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
 
   const update = useCallback(
     (patch: DeepPartial<Theme>) => {
-      setPreview(null)
       if (scope === 'workspace' && workspace) {
         // Store the *difference* from the base, not a copy of the theme: the
         // workspace should inherit later edits to every token it did not touch.
@@ -255,7 +245,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       const preset = presets.find((candidate) => candidate.id === presetId)
       if (!preset) return
       if (scope === 'workspace' && workspace) {
-        setPreview(null)
         send('workspaces:update', { workspaceId: workspace.id, themeId: presetId })
         return
       }
@@ -272,8 +261,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       update,
       applyTheme,
       applyPreset,
-      previewTheme: setPreview,
-      previewing: preview !== null,
       scope,
       setScope,
       workspaceOverride,
@@ -292,7 +279,6 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
       update,
       applyTheme,
       applyPreset,
-      preview,
       scope,
       workspaceOverride,
       setWorkspaceOverride,

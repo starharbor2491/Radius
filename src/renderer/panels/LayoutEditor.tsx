@@ -143,7 +143,7 @@ function RegionRow({ region, layout, onMove, onResize, onToggle }: RegionRowProp
 
       <Field label={REGION_AXIS[region] === 'width' ? 'Width' : 'Height'}>
         <input
-          className="rx-input"
+          className="rx-input rx-input-number"
           type="number"
           min={bounds.min}
           max={bounds.max}
@@ -160,7 +160,9 @@ function RegionRow({ region, layout, onMove, onResize, onToggle }: RegionRowProp
         <div key={panel} className="rx-layout-panel" data-open={isPanelOpen(layout, panel) ? 'true' : 'false'}>
           <span className="rx-layout-panel-name">{PANEL_NAMES[panel]}</span>
           <div className="rx-row">
-            <Button onClick={() => onToggle(panel)}>
+            {/* Ghost styling made these read as labels rather than the
+                controls they are -- two words of plain text beside a select. */}
+            <Button variant="outline" onClick={() => onToggle(panel)}>
               {slice.active === panel ? 'Hide' : 'Show'}
             </Button>
             <select

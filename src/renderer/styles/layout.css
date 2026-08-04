@@ -162,10 +162,16 @@ body .rx-main {
 .rx-dock-grab {
   display: flex;
   align-items: center;
-  gap: var(--rx-space-2);
+  gap: var(--rx-space-1);
   min-width: 0;
-  padding: var(--rx-space-1);
-  margin-inline-start: calc(var(--rx-space-1) * -1);
+  flex: 1;
+  padding: var(--rx-space-1) var(--rx-space-2);
+  /*
+   * Pulled left so the title lines up with the panel content below it, but not
+   * so far that it lands under the resize handle -- two drag affordances eight
+   * pixels apart is one too many to aim at.
+   */
+  margin-inline-start: calc(var(--rx-space-2) * -1);
   border-radius: var(--rx-radius-sm);
   color: var(--rx-color-text-faint);
   cursor: grab;
@@ -174,7 +180,17 @@ body .rx-main {
 
 .rx-dock-grab:hover {
   background: var(--rx-color-surface-2);
-  color: var(--rx-color-text-muted);
+}
+
+/* The grip says "draggable" on approach rather than sitting there permanently. */
+.rx-dock-grip {
+  opacity: 0;
+  flex: none;
+  transition: opacity var(--rx-duration-fast) var(--rx-ease-standard);
+}
+
+.rx-dock-grab:hover .rx-dock-grip {
+  opacity: 1;
 }
 
 .rx-dock-grab:active {

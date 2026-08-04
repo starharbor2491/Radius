@@ -153,6 +153,18 @@ const ICONS = {
     </>
   ),
 
+  /** Six dots: the standard "this row can be dragged" mark. */
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.15" fill="currentColor" stroke="none" />
+    </>
+  ),
+
   /* ----------------------------------------------------- omnibox status */
   /** https. */
   lock: (

@@ -53,7 +53,7 @@ export function SettingsPanel(): JSX.Element {
 
           <Field label="Suspend background tabs after (minutes)">
             <input
-              className="rx-input"
+              className="rx-input rx-input-number"
               type="number"
               min={1}
               max={480}

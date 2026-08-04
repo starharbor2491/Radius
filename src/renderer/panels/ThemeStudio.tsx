@@ -450,7 +450,9 @@ function ScopeSwitch({
           </button>
         ))}
       </div>
-      <span className="rx-faint">
+      {/* Faint is for data you glance past; this explains what the control
+          above it does, so it has to be readable. */}
+      <span className="rx-hint">
         {scope === 'global'
           ? 'Edits change the theme itself, for every workspace.'
           : 'Edits are stored on this workspace and merged over the theme.'}

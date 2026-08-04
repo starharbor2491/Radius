@@ -48,10 +48,23 @@
   color: var(--rx-color-text);
 }
 
+/*
+ * A selected segment, not a primary action.
+ *
+ * Filling it with the accent made "Global theme" the loudest thing in the
+ * panel and read as a button you press to do something, when it is a statement
+ * of which document you are editing. A raised surface with full-contrast text
+ * is what a segmented control looks like everywhere else.
+ */
 .rx-scope-option[data-active='true'] {
-  background: var(--rx-color-accent);
-  color: var(--rx-color-accent-text);
+  background: var(--rx-color-surface-1);
+  color: var(--rx-color-text);
   font-weight: var(--rx-weight-medium);
+  box-shadow: var(--rx-elevation-1);
+}
+
+.rx-scope-option[data-active='true']:hover {
+  background: var(--rx-color-surface-1);
 }
 
 .rx-scope-option:disabled {

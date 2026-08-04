@@ -28,8 +28,16 @@ export interface Command {
   run: () => void
 }
 
-/** What the platform actually is, for shortcut rendering. */
+/**
+ * What the platform actually is.
+ *
+ * The preload hands over `process.platform`, which is the real answer; the
+ * navigator sniff is only a fallback for the stubbed-bridge smoke test, where
+ * there is no preload to ask.
+ */
 export function detectIsMac(): boolean {
+  const fromMain = bridge.platform
+  if (fromMain) return fromMain === 'darwin'
   if (typeof navigator === 'undefined') return false
   const data = (navigator as { userAgentData?: { platform?: string } }).userAgentData
   return isMacPlatform(data?.platform ?? navigator.platform)

@@ -47,16 +47,24 @@ export function ThemePreview({ theme }: { theme: Theme }): JSX.Element {
 /**
  * The theme gallery.
  *
- * Hovering a card applies it to the whole chrome, because a 150px preview
- * cannot tell you whether a theme is comfortable to read a tab strip in.
- * Nothing is persisted until the card is clicked, and the header keeps a way
- * back to whatever was in use when the gallery was opened -- live preview is
- * only honest if leaving is free.
+ * Clicking a card applies it. Hovering does nothing.
  *
- * The cards themselves show each preset as its author wrote it, not as this
- * workspace would render it: an override that repaints every card the same
- * accent would make the grid useless for choosing. The difference is stated
- * under the grid instead.
+ * Hover *used* to repaint the whole window, on the theory that a 150px card
+ * cannot tell you whether a theme is comfortable to read a tab strip in. It
+ * could not: applying a theme rewrites every `--rx-*` custom property on the
+ * root, which invalidates style for the entire chrome -- eleven cards, every
+ * panel, every glass surface with its backdrop filter. Doing that on pointer
+ * move made the gallery unusable, and a preview you have to fight through is
+ * worse than no preview.
+ *
+ * What replaces it is cheaper and honest: the cards are real miniature chromes
+ * rendered by the token engine, applying is one click, and the header keeps a
+ * labelled way back to whatever was in use when the gallery opened. Leaving is
+ * still free -- it is just a button rather than moving the mouse away.
+ *
+ * The cards show each preset as its author wrote it, not as this workspace
+ * would render it: an override that repaints every card the same accent would
+ * make the grid useless for choosing. The difference is stated under the grid.
  */
 export function ThemeGallery(): JSX.Element {
   const {
@@ -65,8 +73,6 @@ export function ThemeGallery(): JSX.Element {
     workspaceOverride,
     applyTheme,
     applyPreset,
-    previewTheme,
-    previewing,
     scope,
     workspaceThemeId,
     setWorkspaceThemeId
@@ -101,7 +107,7 @@ export function ThemeGallery(): JSX.Element {
         ) : null}
       </div>
 
-      <div className="rx-gallery-grid" onMouseLeave={() => previewTheme(null)}>
+      <div className="rx-gallery-grid">
         {presets.map((preset) => {
           const failing = failingContrast(preset)
           return (
@@ -112,9 +118,6 @@ export function ThemeGallery(): JSX.Element {
               data-active={preset.id === activeId ? 'true' : 'false'}
               title={preset.description}
               {...part('theme-card')}
-              onMouseEnter={() => previewTheme(preset)}
-              onFocus={() => previewTheme(preset)}
-              onBlur={() => previewTheme(null)}
               onClick={() => applyPreset(preset.id)}
             >
               <ThemePreview theme={preset} />
@@ -137,18 +140,16 @@ export function ThemeGallery(): JSX.Element {
       </div>
 
       <span className="rx-faint rx-gallery-hint">
-        {previewing
-          ? 'Previewing. Nothing is saved until you click.'
-          : scope === 'workspace'
-            ? 'Clicking pins a preset as this workspace’s base theme.'
-            : 'Hover to try a theme on the whole window; click to keep it.'}
+        {scope === 'workspace'
+          ? 'Clicking pins a preset as this workspace’s base theme.'
+          : 'Click a theme to apply it. You can come back to the one you had.'}
       </span>
 
       {/*
-        A card previews the preset as its author wrote it. The window preview on
-        hover shows the truth, which is the preset with this workspace's
-        override still on top of it -- so when those differ, say so rather than
-        letting the cards quietly promise something they will not deliver.
+        A card shows the preset as its author wrote it. What you will actually
+        get is that preset with this workspace's override still on top, so when
+        those differ, say so rather than letting the cards quietly promise
+        something they will not deliver.
       */}
       {overrideCount > 0 ? (
         <span className="rx-faint rx-gallery-hint">

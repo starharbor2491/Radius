@@ -23,6 +23,7 @@ import {
 } from '@shared/layout'
 import { useAppStore } from './store/useAppStore'
 import { useUiStore, useWorkspaceLayout } from './store/useUiStore'
+import { useIsMac } from './lib/commands'
 import { useCommandDispatch, useCommands } from './lib/commands'
 import { useMotionTokens } from './lib/motion'
 import { send } from './lib/bridge'
@@ -72,6 +73,8 @@ export function App(): JSX.Element {
 
   const layout = useWorkspaceLayout()
   const toast = useUiStore((store) => store.toast)
+  const sidebarOpen = useUiStore((store) => store.sidebarOpen)
+  const isMac = useIsMac()
   const signature = layoutSignature(layout)
 
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -135,7 +138,18 @@ export function App(): JSX.Element {
   }, [signature, reportInsets])
 
   return (
-    <div className="rx-shell" data-radius-part="shell">
+    <div
+      className="rx-shell"
+      data-radius-part="shell"
+      /*
+       * macOS draws its own close/minimise/zoom buttons over the top-left of a
+       * frameless window, and the chrome has to keep out from under them. Both
+       * facts matter: which platform, and whether the sidebar is open -- with it
+       * closed the toolbar becomes the leftmost thing and inherits the problem.
+       */
+      data-platform={isMac ? 'mac' : 'other'}
+      data-sidebar={sidebarOpen ? 'open' : 'closed'}
+    >
       <Sidebar ref={sidebarRef} />
 
       <Dock region="left" layout={layout} hostRef={leftRef} />
@@ -325,19 +339,30 @@ function Dock({ region, layout, hostRef }: DockProps): JSX.Element {
             data-radius-part="panel"
             style={axis === 'width' ? { width: size } : { height: size }}
           >
+            {/*
+              The title bar is the drag handle -- that is the idiom, and a
+              separate glyph for it only added a second thing to aim at eight
+              pixels from the resize handle. The grip appears on hover to say
+              the row is draggable without sitting there permanently.
+            */}
             <div className="rx-panel-header" data-radius-part="panel-header">
               <div
                 className="rx-dock-grab"
                 onPointerDown={startPanelDrag}
                 title={`Drag to move ${PANEL_NAMES[active]} to another dock`}
               >
-                <Icon name="list" size={13} />
+                <Icon className="rx-dock-grip" name="grip" size={12} />
                 <span className="rx-panel-title" data-radius-part="panel-title">
                   {PANEL_TITLES[active]}
                 </span>
               </div>
-              <IconButton aria-label="Close panel" onClick={() => closeRegion(region)}>
-                <Icon name="close" size={13} />
+              <IconButton
+                className="rx-panel-close"
+                aria-label={`Close ${PANEL_NAMES[active]}`}
+                title={`Close ${PANEL_NAMES[active]}`}
+                onClick={() => closeRegion(region)}
+              >
+                <Icon name="close" size={14} />
               </IconButton>
             </div>
 

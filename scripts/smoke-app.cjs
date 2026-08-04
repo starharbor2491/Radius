@@ -248,6 +248,52 @@ async function run() {
   })()`)
   check('the sidebar has a real width', chromeBox.sidebarWidth > 100, JSON.stringify(chromeBox))
 
+  /*
+   * macOS draws close/minimise/zoom over the top-left of a frameless window.
+   * The chrome keeps clear of them through a reservation driven by the shell's
+   * `data-platform`, which means the layout is checkable from any platform:
+   * force the attribute, then look for anything clickable in that corner.
+   *
+   * Worth asserting rather than eyeballing, because the machine this runs on is
+   * not a Mac and the failure is invisible here -- a zoom button sitting on the
+   * workspace name is something only a Mac user would ever see.
+   */
+  for (const sidebarState of ['open', 'closed']) {
+    const overlaps = await chrome.executeJavaScript(`(async () => {
+      const shell = document.querySelector('.rx-shell')
+      shell.dataset.platform = 'mac'
+      if (${sidebarState === 'closed'}) {
+        document.querySelector('[aria-label="Toggle sidebar"]').click()
+        await new Promise((r) => setTimeout(r, 700))
+        shell.dataset.platform = 'mac'
+      }
+      await new Promise((r) => setTimeout(r, 300))
+
+      // The button group runs to about x=68; allow a little margin.
+      const zone = { right: 74, bottom: 34 }
+      const hits = [...document.querySelectorAll('button, input, textarea, select, .rx-tab')]
+        .filter((el) => {
+          const b = el.getBoundingClientRect()
+          return b.width > 0 && b.height > 0 && b.left < zone.right && b.top < zone.bottom
+        })
+        .map((el) => el.getAttribute('aria-label') || el.className)
+      return hits
+    })()`)
+    check(
+      `nothing sits under the macOS window buttons, sidebar ${sidebarState}`,
+      overlaps.length === 0,
+      overlaps.join(', ')
+    )
+  }
+
+  // Put it back the way it was for everything that follows.
+  await chrome.executeJavaScript(`(async () => {
+    document.querySelector('.rx-shell').dataset.platform = 'other'
+    document.querySelector('[aria-label="Toggle sidebar"]').click()
+    await new Promise((r) => setTimeout(r, 700))
+    return true
+  })()`)
+
   const pageView = BaseWindow.getAllWindows()[0]
     .contentView.children.find((view) => view.webContents
       && view.webContents.getURL().startsWith('http://127.0.0.1'))

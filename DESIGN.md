@@ -91,6 +91,13 @@ These are where a UI usually gives itself away.
   the palette. An empty panel is the first thing a new user sees.
 - **Numbers that are not known are absent.** Consistent with the AI layer: no
   fabricated cost, no invented progress bar, no fake percentage.
+- **Explanatory text is readable.** `--rx-color-text-faint` is for data you
+  glance past -- a count, a timestamp. A sentence explaining what a control does
+  is not that, and rendering one in the faintest colour on the palette is how it
+  ends up invisible.
+- **A selected segment is not a primary button.** Filling a segmented control's
+  active option with the accent makes a statement of current state look like an
+  action you take. Raise the surface instead.
 - **Scrollbars are styled.** A default Chromium scrollbar next to a themed panel
   is the single loudest tell that the surface was not looked at.
 - **Accelerators render per platform.** `⌘⇧T` on macOS, `Ctrl+Shift+T`

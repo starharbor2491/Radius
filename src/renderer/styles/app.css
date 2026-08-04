@@ -154,11 +154,50 @@ textarea {
  * Shell layout
  * ------------------------------------------------------------------ */
 
+/*
+ * Room for the macOS window buttons.
+ *
+ * A frameless window on macOS still has the OS draw close/minimise/zoom over
+ * its top-left corner. The three buttons are 14pt across on 20pt centres, so
+ * the group spans about 54pt, and with the inset Electron gives `hiddenInset`
+ * it reaches roughly 68px from the window edge. The workspace rail is 52px --
+ * so the zoom button was landing on the workspace name, and on the toolbar's
+ * first button whenever the sidebar was closed.
+ *
+ * Reserved here as tokens so every surface that could collide reads the same
+ * number, and so the reservation is exactly zero everywhere else. Nothing is
+ * moved on Windows or Linux, which have no such buttons.
+ */
 .rx-shell {
+  --rx-rail-width: 52px;
+  --rx-window-controls-width: 0px;
+  --rx-window-controls-height: 0px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   height: 100%;
   width: 100%;
+}
+
+.rx-shell[data-platform='mac'] {
+  --rx-window-controls-width: 78px;
+  --rx-window-controls-height: 36px;
+}
+
+/*
+ * The rail alone is narrower than the buttons, so they spill past it onto
+ * whatever is immediately to its right. That is the sidebar's header row when
+ * the sidebar is open, and the toolbar when it is not -- each takes the
+ * overspill as left padding, which keeps everything on the line it was already
+ * on rather than pushing the whole column down.
+ */
+.rx-shell[data-platform='mac'] .rx-sidebar-header {
+  padding-left: calc(var(--rx-window-controls-width) - var(--rx-rail-width));
+}
+
+.rx-shell[data-platform='mac'][data-sidebar='closed'] .rx-toolbar {
+  padding-left: calc(
+    var(--rx-window-controls-width) - var(--rx-rail-width) + var(--rx-space-2)
+  );
 }
 
 .rx-sidebar {
@@ -248,14 +287,18 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: var(--rx-space-2);
-  width: 52px;
+  width: var(--rx-rail-width);
   padding: var(--rx-space-3) 0;
   flex: none;
 }
 
 .rx-rail-drag {
-  /* Reserve room for macOS traffic lights and give the window a drag handle. */
-  height: 28px;
+  /*
+   * The window's drag handle, and the vertical half of the window-controls
+   * reservation. 28px is the minimum that reads as a title strip; on macOS the
+   * buttons need more than that.
+   */
+  height: max(28px, var(--rx-window-controls-height));
   width: 100%;
   -webkit-app-region: drag;
   flex: none;
@@ -426,15 +469,27 @@ textarea {
 /*
  * An empty panel is the first thing a new user sees, so it says what to do in
  * body text rather than whispering it in the faintest colour on the palette.
+ *
+ * Centred in whatever space it has. Pinned to the top it left a panel-height
+ * void underneath, which reads as something that failed to load rather than as
+ * a panel waiting for you.
  */
 .rx-empty {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: var(--rx-space-2);
   padding: var(--rx-space-4) 0;
   max-width: 44ch;
   color: var(--rx-color-text-muted);
+}
+
+/* Inside a scrolling log it takes the whole height and centres itself in it. */
+.rx-chat-log > .rx-empty {
+  flex: 1;
+  min-height: 0;
+  padding-block: 0;
 }
 
 .rx-empty > .rx-icon {
@@ -1186,12 +1241,37 @@ input[type='checkbox']:focus-visible {
  * Panels
  * ------------------------------------------------------------------ */
 
+/*
+ * A panel's title bar. The title is the drag handle and the close button is the
+ * only other thing in it, so the row stays quiet -- it is a label for what is
+ * below, not a toolbar of its own.
+ */
 .rx-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--rx-space-2);
   flex: none;
+  min-height: calc(28px * var(--rx-density));
+}
+
+/*
+ * Visible, but quiet until you go for it. A close button you cannot find is a
+ * panel you cannot dismiss; a close button at full contrast competes with the
+ * title beside it.
+ */
+.rx-panel-close {
+  flex: none;
+  color: var(--rx-color-text-faint);
+}
+
+.rx-panel-header:hover .rx-panel-close,
+.rx-panel-close:focus-visible {
+  color: var(--rx-color-text-muted);
+}
+
+.rx-panel-close:hover {
+  color: var(--rx-color-text);
 }
 
 .rx-panel-title {
@@ -1997,4 +2077,77 @@ input[type='checkbox']:focus-visible {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Bookmarks
+ * ------------------------------------------------------------------ */
+
+.rx-bookmarks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rx-space-1);
+  overflow: hidden;
+}
+
+.rx-bookmarks-filter {
+  flex: none;
+  margin-bottom: var(--rx-space-1);
+}
+
+/*
+ * A real ceiling rather than a percentage of a content-sized parent. Nine rows
+ * is enough to be a list and short enough to leave the tab strip usable; past
+ * that it scrolls.
+ */
+.rx-bookmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: calc(9 * 32px * var(--rx-density));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Rows must not be squeezed by the flex parent; they are a fixed height. */
+.rx-bookmark {
+  flex: none;
+}
+
+.rx-bookmarks-empty {
+  margin: 0;
+  padding: var(--rx-space-2);
+  color: var(--rx-color-text-faint);
+  font-size: var(--rx-text-n1);
+}
+
+/*
+ * A field sized to what goes in it. A three-digit number in a field stretched
+ * across the panel reads as somewhere to type a sentence, and the empty space
+ * to the right of "380" is the tell that nobody looked at it.
+ */
+.rx-input-number {
+  width: 7ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The spinners are noise on a field with a known range. */
+.rx-input-number::-webkit-inner-spin-button,
+.rx-input-number::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/*
+ * Explanatory text under a control.
+ *
+ * Distinct from `.rx-faint`, which is for metadata you are meant to glance
+ * past -- a count, a timestamp. A sentence that tells you what a control does
+ * has to be readable, and several of them were being rendered in the faintest
+ * colour on the palette.
+ */
+.rx-hint {
+  color: var(--rx-color-text-muted);
+  font-size: var(--rx-text-n1);
 }

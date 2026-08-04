@@ -42,6 +42,28 @@ Geometry flows one way: the renderer measures its own layout with a
 side that may call `view.setBounds()`. That is why dragging the sidebar edge
 really does resize the web page.
 
+### Room for the window's own buttons
+
+macOS draws close/minimise/zoom over the top-left of a frameless window, and
+the chrome has to keep out from under them. The three buttons are 14pt across
+on 20pt centres, so the group spans about 54pt and reaches roughly 68px from
+the window edge with the inset `hiddenInset` gives it. The workspace rail is
+52px, so the zoom button was landing on the workspace name -- and on the
+toolbar's first button whenever the sidebar was closed.
+
+The reservation is two tokens (`--rx-window-controls-width/height`) set from
+`.rx-shell[data-platform='mac']` and zero everywhere else, so nothing moves on
+Windows or Linux. The overspill past the rail is taken as left padding by
+whatever is immediately to its right: the sidebar's header row, or the toolbar
+when the sidebar is closed. Both stay on the line they were already on rather
+than the whole column shifting down.
+
+Driving it off a data attribute rather than a media query is what makes it
+testable from any platform: `npm run smoke:app` forces the attribute, then
+looks for anything clickable in that corner. Worth asserting rather than
+eyeballing, since the machine CI runs on is not a Mac and the failure is
+invisible there.
+
 ### Security posture
 
 - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true` on every
