@@ -125,10 +125,15 @@ export function AgentPanel(): JSX.Element {
       accent: theme.colors.accent
     })
 
+    /*
+     * The system prompt is its own message; the goal rides along with the first
+     * page map, so the very first turn is system + user rather than
+     * system + user + user.
+     */
     const transcript: ChatMessage[] = [
-      { id: 'sys', role: 'system', content: AGENT_SYSTEM_PROMPT, createdAt: Date.now() },
-      { id: 'goal', role: 'user', content: `Task: ${goal.trim()}`, createdAt: Date.now() }
+      { id: 'sys', role: 'system', content: AGENT_SYSTEM_PROMPT, createdAt: Date.now() }
     ]
+    let pendingResult = `Task: ${goal.trim()}`
 
     try {
       for (let step = 0; step < MAX_AGENT_STEPS; step += 1) {
@@ -136,12 +141,28 @@ export function AgentPanel(): JSX.Element {
 
         setRunState('thinking')
         const map = await bridge.invoke('agent:describe', { tabId })
+
+        /*
+         * One user turn per step: what the last action did, and what the page
+         * looks like now. These used to be two separate user messages, which
+         * meant every round after the first sent two `user` turns in a row --
+         * and a great many chat templates raise on that rather than tolerate
+         * it:
+         *
+         *   Jinja Exception: After the optional system message, conversation
+         *   roles must alternate user and assistant roles
+         *
+         * `normaliseForChatTemplate` in main is the backstop for every caller,
+         * but they belong together anyway: the outcome of an action and the
+         * state it produced are one observation, not two.
+         */
         transcript.push({
           id: `page-${step}`,
           role: 'user',
-          content: formatPageMap(map),
+          content: [pendingResult, formatPageMap(map)].filter(Boolean).join('\n\n'),
           createdAt: Date.now()
         })
+        pendingResult = ''
 
         const reply = await ask(transcript)
         if (stopRef.current) break
@@ -171,13 +192,8 @@ export function AgentPanel(): JSX.Element {
         const result = await bridge.invoke('agent:act', { tabId, action })
         appendStep({ action: action.kind, detail: result.detail, ok: result.ok })
 
-        // The model needs to know whether its own action worked.
-        transcript.push({
-          id: `result-${step}`,
-          role: 'user',
-          content: result.ok ? `Result: ${result.detail}` : `That failed: ${result.detail}`,
-          createdAt: Date.now()
-        })
+        // Carried into the next turn's message rather than sent as its own.
+        pendingResult = result.ok ? `Result: ${result.detail}` : `That failed: ${result.detail}`
 
         if (step === MAX_AGENT_STEPS - 1) {
           appendStep({

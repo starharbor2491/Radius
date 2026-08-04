@@ -35,6 +35,7 @@ import { createOpenAiCompatibleAdapter, openAiAdapter } from './adapters/openai'
 import { manifestAdapter } from './adapters/manifest'
 import type { ProviderAdapter } from './adapters/types'
 import { estimateCost } from './cost'
+import { normaliseForChatTemplate } from './messages'
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096
 
@@ -470,10 +471,18 @@ export class ProviderRegistry {
     const adapter = this.adapterFor(config)
     const model = config.models.find((entry) => entry.id === candidate.modelId)
 
+    /*
+     * Shaped here, at the last point before any adapter sees it, so every
+     * caller and every tier gets the same treatment. A transcript that does not
+     * alternate is a 500 from a Jinja-templated server with no clue which
+     * message was at fault -- see `normaliseForChatTemplate`.
+     */
+    const messages = normaliseForChatTemplate(input.messages)
+
     let usage: TokenUsage | null = null
     for await (const part of adapter.stream({
       modelId: candidate.modelId,
-      messages: input.messages,
+      messages,
       apiKey: this.keyFor(config),
       baseUrl: config.baseUrl,
       manifest: config.manifest,

@@ -196,6 +196,27 @@ degrades to a typed model id plus a Discover button rather than hiding the
 provider. Removing a seeded provider records it under `aiDismissedProviders`, or
 the next boot would seed it straight back.
 
+**Transcripts are normalised before any adapter sees them.** Most of the
+Mistral and Llama families -- and anything served through a Jinja chat template,
+which is everything LM Studio and Ollama run -- do not merely prefer
+alternating roles, they raise on anything else:
+
+> Jinja Exception: After the optional system message, conversation roles must
+> alternate user and assistant roles
+
+That arrives as a 500 with no indication of which message was at fault, so it is
+worth never sending one. Radius produced them routinely: the agent loop sent the
+result of an action and then the new page map as two separate user turns, and
+the chat panel leaves a user turn with no reply behind when a request fails, so
+the next question is a second user turn in a row.
+
+`normaliseForChatTemplate` merges consecutive same-role turns, folds every
+system message into one at the front, and drops empty ones. It runs in
+`ProviderRegistry.attempt`, at the last point before an adapter is called, so
+every caller and every tier is covered at once -- which matters most for the
+OpenAI-compatible tier, where the endpoint is whatever the user configured and
+its strictness is unknowable from here.
+
 **Cost** is computed from published pricing when it is known and reported as
 zero when it is not. The meter never invents a figure.
 
